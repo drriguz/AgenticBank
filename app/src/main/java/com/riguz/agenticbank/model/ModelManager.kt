@@ -53,7 +53,7 @@ class ModelManager(application: Application) : AndroidViewModel(application) {
 
                 val modelPath = prepareModelFile(context)
 
-                _state.value = State.Loading(0.5f, "Loading Gemma 4 E2B model...\nThis takes about 10 seconds")
+                _state.value = State.Loading(0.5f, "Loading Gemma 4 E2B model...")
 
                 val (eng, backendName) = tryInitializeEngine(modelPath, context)
 
