@@ -55,17 +55,10 @@ class ModelManager(application: Application) : AndroidViewModel(application) {
 
                 _state.value = State.Loading(0.5f, "Loading Gemma 4 E2B model...\nThis takes about 10 seconds")
 
-                val engineConfig = EngineConfig(
-                    modelPath = modelPath,
-                    backend = Backend.CPU(),
-                    cacheDir = context.cacheDir.path,
-                )
-
-                val eng = Engine(engineConfig)
-                eng.initialize()
+                val (eng, backendName) = tryInitializeEngine(modelPath, context)
 
                 engine = eng
-                _state.value = State.Ready(eng, "CPU")
+                _state.value = State.Ready(eng, backendName)
 
             } catch (e: Exception) {
                 _state.value = State.Error(
@@ -204,23 +197,38 @@ class ModelManager(application: Application) : AndroidViewModel(application) {
 
                 _state.value = State.Loading(0.5f, "Loading Gemma 4 E2B model...\nThis takes about 10 seconds")
 
-                val engineConfig = EngineConfig(
-                    modelPath = internalPath.path,
-                    backend = Backend.CPU(),
-                    cacheDir = context.cacheDir.path,
-                )
-
-                val eng = Engine(engineConfig)
-                eng.initialize()
+                val (eng, backendName) = tryInitializeEngine(internalPath.path, context)
 
                 engine = eng
-                _state.value = State.Ready(eng, "CPU")
+                _state.value = State.Ready(eng, backendName)
 
             } catch (e: Exception) {
                 _state.value = State.Error(
                     "Failed to load model: ${e.message}"
                 )
             }
+        }
+    }
+
+    private fun tryInitializeEngine(modelPath: String, context: Application): Pair<Engine, String> {
+        return try {
+            val gpuConfig = EngineConfig(
+                modelPath = modelPath,
+                backend = Backend.GPU(),
+                cacheDir = context.cacheDir.path,
+            )
+            val eng = Engine(gpuConfig)
+            eng.initialize()
+            eng to "GPU"
+        } catch (e: Exception) {
+            val cpuConfig = EngineConfig(
+                modelPath = modelPath,
+                backend = Backend.CPU(),
+                cacheDir = context.cacheDir.path,
+            )
+            val eng = Engine(cpuConfig)
+            eng.initialize()
+            eng to "CPU (GPU init failed: ${e.message})"
         }
     }
 
