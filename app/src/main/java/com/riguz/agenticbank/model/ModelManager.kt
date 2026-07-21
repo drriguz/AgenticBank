@@ -219,6 +219,7 @@ class ModelManager(application: Application) : AndroidViewModel(application) {
                 backend = Backend.GPU(),
                 visionBackend = visionBackend,
                 audioBackend = audioBackend,
+                maxNumImages = 20,
                 cacheDir = context.cacheDir.path,
             )
             val eng = Engine(gpuConfig)
@@ -230,6 +231,7 @@ class ModelManager(application: Application) : AndroidViewModel(application) {
                 backend = Backend.CPU(),
                 visionBackend = visionBackend,
                 audioBackend = audioBackend,
+                maxNumImages = 20,
                 cacheDir = context.cacheDir.path,
             )
             val eng = Engine(cpuConfig)

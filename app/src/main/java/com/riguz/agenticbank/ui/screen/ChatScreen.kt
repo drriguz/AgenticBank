@@ -20,6 +20,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +37,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,14 +53,20 @@ import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardVoice
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -89,6 +100,8 @@ import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
+import com.riguz.agenticbank.agent.ToolExecutor
+import com.riguz.agenticbank.agent.ToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -102,9 +115,11 @@ data class ChatMessage(
     val isUser: Boolean,
     val hasImage: Boolean = false,
     val imageUri: Uri? = null,
+    val imageBytesList: List<ByteArray> = emptyList(),
     val hasAudio: Boolean = false,
     val audioBytes: ByteArray? = null,
     val speedInfo: String? = null,
+    val toolResult: ToolResult? = null,
 )
 
 @Composable
@@ -113,6 +128,9 @@ fun ChatScreen(
     backendName: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    title: String = "AI Assistant",
+    systemPrompt: String = "You are a professional banking assistant. Answer concisely and helpfully.",
+    termsheetPages: List<ByteArray>? = null,
 ) {
     val context = LocalContext.current
     val messages = remember { mutableStateListOf<ChatMessage>() }
@@ -126,30 +144,34 @@ fun ChatScreen(
     var isRecording by remember { mutableStateOf(false) }
     var isVoiceMode by remember { mutableStateOf(false) }
     var recordingSeconds by remember { mutableIntStateOf(0) }
+    var selectedTermsheetPage by remember { mutableStateOf<Int?>(null) }
+    var showTermsheetPicker by remember { mutableStateOf(false) }
 
     val conversation = remember {
+        messages.clear()
         engine.createConversation(
             ConversationConfig(
-                systemInstruction = Contents.of(
-                    "You are a professional banking assistant. Answer concisely and helpfully."
-                ),
+                systemInstruction = Contents.of(systemPrompt),
             )
         )
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(conversation) {
         onDispose { conversation.close() }
     }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
+            delay(100)
             listState.animateScrollToItem(messages.size - 1)
         }
     }
 
     val lastMessageTextLen = messages.lastOrNull()?.text?.length ?: 0
-    LaunchedEffect(lastMessageTextLen) {
+    val lastMessageImageCount = messages.lastOrNull()?.imageBytesList?.size ?: 0
+    LaunchedEffect(lastMessageTextLen, lastMessageImageCount) {
         if (messages.isNotEmpty()) {
+            delay(100)
             listState.animateScrollToItem(messages.size - 1)
         }
     }
@@ -173,23 +195,30 @@ fun ChatScreen(
     fun sendMessage() {
         val text = inputText.trim()
         val hasAttach = attachedImageUri != null || attachedAudioBytes != null
-        if (text.isEmpty() && !hasAttach) return
+        val hasTermsheet = selectedTermsheetPage != null && termsheetPages != null
+        if (text.isEmpty() && !hasAttach && !hasTermsheet) return
         if (isLoading) return
+
+        val termsheetPageBytes = if (hasTermsheet) termsheetPages!![selectedTermsheetPage!!] else null
 
         val msgText = text.ifEmpty { "" }
         messages.add(ChatMessage(
             text = msgText,
             isUser = true,
-            hasImage = attachedImageUri != null,
+            hasImage = attachedImageUri != null || termsheetPageBytes != null,
             imageUri = attachedImageUri,
+            imageBytesList = if (termsheetPageBytes != null) listOf(termsheetPageBytes) else emptyList(),
             hasAudio = attachedAudioBytes != null,
             audioBytes = attachedAudioBytes,
         ))
         val savedImageUri = attachedImageUri
         val savedAudioBytes = attachedAudioBytes
+        val savedTermsheetPage = termsheetPageBytes
+        val savedPageIndex = selectedTermsheetPage
         inputText = ""
         attachedImageUri = null
         attachedAudioBytes = null
+        selectedTermsheetPage = null
         isLoading = true
 
         val pendingIndex = messages.size
@@ -199,26 +228,62 @@ fun ChatScreen(
             val startTime = System.currentTimeMillis()
             var tokenCount = 0
             try {
-                val hasAttach = savedImageUri != null || savedAudioBytes != null
-                if (hasAttach) {
-                    val contents = buildContents(context, text, savedImageUri, savedAudioBytes)
-                    conversation.sendMessageAsync(contents).collect { chunk ->
-                        tokenCount++
-                        val existing = messages[pendingIndex]
-                        messages[pendingIndex] = existing.copy(text = existing.text + chunk.toString())
-                    }
-                } else {
-                    conversation.sendMessageAsync(text).collect { chunk ->
-                        tokenCount++
-                        val existing = messages[pendingIndex]
-                        messages[pendingIndex] = existing.copy(text = existing.text + chunk.toString())
+                val contents = mutableListOf<Content>()
+                if (savedTermsheetPage != null) {
+                    contents.add(Content.ImageBytes(savedTermsheetPage))
+                }
+                if (savedImageUri != null) {
+                    val imageBytes = context.contentResolver.openInputStream(savedImageUri)?.readBytes()
+                    if (imageBytes != null) contents.add(Content.ImageBytes(imageBytes))
+                }
+                if (savedAudioBytes != null) {
+                    contents.add(Content.AudioBytes(savedAudioBytes))
+                }
+                val effectiveText = text.ifBlank {
+                    when {
+                        savedImageUri != null -> "Describe this image"
+                        savedAudioBytes != null -> "Respond to this voice message"
+                        savedTermsheetPage != null -> "This is page ${savedPageIndex!! + 1} of the product termsheet provided by the bank for internal reference. Use it to answer questions about this product."
+                        else -> ""
                     }
                 }
+                if (effectiveText.isNotBlank()) {
+                    contents.add(Content.Text(effectiveText))
+                }
+
+                var fullResponse = ""
+                conversation.sendMessageAsync(Contents.of(contents)).collect { chunk ->
+                    tokenCount++
+                    fullResponse += chunk.toString()
+                    val existing = messages[pendingIndex]
+                    messages[pendingIndex] = existing.copy(text = fullResponse)
+                }
+
                 val elapsed = (System.currentTimeMillis() - startTime).coerceAtLeast(1)
                 val tps = tokenCount * 1000f / elapsed
                 messages[pendingIndex] = messages[pendingIndex].copy(
                     speedInfo = "%.1f tokens/s  %d tokens  %.1fs".format(tps, tokenCount, elapsed / 1000.0)
                 )
+
+                val toolCall = ToolExecutor.parseToolCall(fullResponse)
+                if (toolCall != null) {
+                    val (tool, params) = toolCall
+                    val toolResult = ToolExecutor.execute(tool, params)
+                    if (toolResult !is ToolResult.None) {
+                        val resultText = when (toolResult) {
+                            is ToolResult.CalculationResult -> ToolExecutor.formatCalculationResult(toolResult)
+                            is ToolResult.SubscriptionConfirmation -> "认购确认卡片已显示 (Subscription confirmation card shown)"
+                            is ToolResult.ToolMessage -> toolResult.message
+                            is ToolResult.Error -> "工具错误: ${toolResult.message}"
+                            is ToolResult.None -> ""
+                        }
+                        messages.add(ChatMessage(
+                            text = resultText,
+                            isUser = false,
+                            toolResult = toolResult,
+                        ))
+                    }
+                }
             } catch (e: Exception) {
                 messages[pendingIndex] = ChatMessage("Error: ${e.message}", isUser = false)
             } finally {
@@ -285,7 +350,7 @@ fun ChatScreen(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Gemma 4 E2B",
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -304,6 +369,110 @@ fun ChatScreen(
                             Color(0xFF34A853) else Color(0xFFB8860B),
                     )
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                if (termsheetPages != null) {
+                    Surface(
+                        onClick = { showTermsheetPicker = true },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (selectedTermsheetPage != null) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.Description,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = if (selectedTermsheetPage != null) MaterialTheme.colorScheme.onPrimary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (selectedTermsheetPage != null) "Page ${selectedTermsheetPage!! + 1}" else "Termsheet",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = if (selectedTermsheetPage != null) MaterialTheme.colorScheme.onPrimary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (showTermsheetPicker && termsheetPages != null) {
+                AlertDialog(
+                    onDismissRequest = { showTermsheetPicker = false },
+                    title = { Text("Select Termsheet Page") },
+                    text = {
+                        Column {
+                            Text(
+                                "Choose a page to include in the conversation:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            val primaryColor = MaterialTheme.colorScheme.primary
+                            val outlineColor = MaterialTheme.colorScheme.outlineVariant
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                items(termsheetPages.size) { index ->
+                                    val pageBytes = termsheetPages[index]
+                                    val bitmap = remember(pageBytes) {
+                                        BitmapFactory.decodeByteArray(pageBytes, 0, pageBytes.size)
+                                    }
+                                    val isSelected = selectedTermsheetPage == index
+                                    Surface(
+                                        onClick = {
+                                            selectedTermsheetPage = index
+                                            showTermsheetPicker = false
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) primaryColor else outlineColor,
+                                        ),
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                        ) {
+                                            if (bitmap != null) {
+                                                Image(
+                                                    bitmap = bitmap.asImageBitmap(),
+                                                    contentDescription = "Page ${index + 1}",
+                                                    contentScale = ContentScale.Fit,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(120.dp)
+                                                        .clip(RoundedCornerShape(4.dp)),
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Page ${index + 1}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            selectedTermsheetPage = null
+                            showTermsheetPicker = false
+                        }) {
+                            Text("Clear")
+                        }
+                    },
+                )
             }
 
             HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
@@ -584,13 +753,6 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                     horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start,
                     modifier = Modifier.widthIn(max = 300.dp),
                 ) {
-                    if (message.hasAudio && message.audioBytes != null) {
-                        VoiceMessagePlayer(
-                            audioBytes = message.audioBytes,
-                            isUser = message.isUser,
-                        )
-                    }
-
                     if (message.hasImage && message.imageUri != null) {
                         val context = LocalContext.current
                         val bitmap = remember(message.imageUri) {
@@ -621,7 +783,45 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                         }
                     }
 
-                    if (message.hasImage && message.imageUri != null) {
+                    if (message.imageBytesList.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            for (pageBytes in message.imageBytesList) {
+                                val bitmap = remember(pageBytes) {
+                                    BitmapFactory.decodeByteArray(pageBytes, 0, pageBytes.size)
+                                }
+                                if (bitmap != null) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (message.isUser) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.surfaceVariant,
+                                    ) {
+                                        Image(
+                                            bitmap = bitmap.asImageBitmap(),
+                                            contentDescription = "Termsheet page",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(width = 80.dp, height = 110.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    val hasImagesAbove = (message.hasImage && message.imageUri != null) || message.imageBytesList.isNotEmpty()
+                    if (hasImagesAbove) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (message.hasAudio && message.audioBytes != null) {
+                        VoiceMessagePlayer(
+                            audioBytes = message.audioBytes,
+                            isUser = message.isUser,
+                        )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
 
@@ -645,17 +845,17 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                             )
                         }
                     } else if (isStreaming) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        Surface(
+                            shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.widthIn(min = 120.dp),
                         ) {
-                            Text(
-                                text = "\u25CF  \u25CF  \u25CF",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                letterSpacing = 4.sp,
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
                             )
                         }
                     }
@@ -668,8 +868,155 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                             modifier = Modifier.padding(start = 4.dp, top = 2.dp),
                         )
                     }
+
+                    if (message.toolResult != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        when (val result = message.toolResult) {
+                            is ToolResult.CalculationResult -> CalculationCard(result)
+                            is ToolResult.SubscriptionConfirmation -> ConfirmationCard(result)
+                            is ToolResult.Error -> ErrorCard(result.message)
+                            else -> {}
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CalculationCard(result: ToolResult.CalculationResult) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "\uD83D\uDCCA 收益计算结果",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            CalculationRow("投资金额", "USD %,.0f".format(result.investmentAmount))
+            CalculationRow("年化收益率", "%.1f%%".format(result.annualRate * 100))
+            CalculationRow("投资期限", "%d 个月".format(result.tenorMonths))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            CalculationRow("预期收益", "USD %,.2f".format(result.expectedReturn), isHighlight = true)
+            CalculationRow("到期日", result.maturityDate)
+            CalculationRow("到期总额", "USD %,.2f".format(result.totalPayout), isHighlight = true)
+        }
+    }
+}
+
+@Composable
+private fun CalculationRow(label: String, value: String, isHighlight: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (isHighlight) FontWeight.Bold else FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
+}
+
+@Composable
+private fun ConfirmationCard(result: ToolResult.SubscriptionConfirmation) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "\uD83D\uDCDD 认购确认",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            ConfirmationRow("产品编号", result.productId)
+            ConfirmationRow("产品名称", result.productName)
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            ConfirmationRow("投资金额", "USD %,.0f".format(result.investmentAmount))
+            ConfirmationRow("投资期限", "%d 个月".format(result.tenorMonths))
+            ConfirmationRow("风险等级", "%d (高)".format(result.riskRating))
+            ConfirmationRow("本金保护", result.principalProtection)
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            ConfirmationRow("预期收益", "USD %,.2f".format(result.expectedReturn), isHighlight = true)
+            ConfirmationRow("到期日", result.maturityDate)
+            ConfirmationRow("到期总额", "USD %,.2f".format(result.totalPayout), isHighlight = true)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "请确认以上信息无误后，回复「确认认购」完成认购。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConfirmationRow(label: String, value: String, isHighlight: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (isHighlight) FontWeight.Bold else FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+    }
+}
+
+@Composable
+private fun ErrorCard(message: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "\u26A0\uFE0F",
+                fontSize = 16.sp,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
         }
     }
 }
@@ -847,39 +1194,6 @@ private fun VoiceMessagePlayer(audioBytes: ByteArray, isUser: Boolean) {
             }
         }
     }
-}
-
-private fun buildContents(
-    context: android.content.Context,
-    text: String,
-    imageUri: Uri?,
-    audioBytes: ByteArray?,
-): Contents {
-    val contents = mutableListOf<Content>()
-
-    if (imageUri != null) {
-        val imageBytes = context.contentResolver.openInputStream(imageUri)?.readBytes()
-        if (imageBytes != null) {
-            contents.add(Content.ImageBytes(imageBytes))
-        }
-    }
-
-    if (audioBytes != null) {
-        contents.add(Content.AudioBytes(audioBytes))
-    }
-
-    val effectiveText = text.ifBlank {
-        when {
-            imageUri != null -> "Describe this image"
-            audioBytes != null -> "Respond to this voice message"
-            else -> ""
-        }
-    }
-    if (effectiveText.isNotBlank()) {
-        contents.add(Content.Text(effectiveText))
-    }
-
-    return Contents.of(contents.toList())
 }
 
 private var audioRecord: AudioRecord? = null
