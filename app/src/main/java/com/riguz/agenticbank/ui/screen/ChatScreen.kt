@@ -6,6 +6,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaPlayer
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -74,6 +77,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -96,6 +101,7 @@ data class ChatMessage(
     val text: String,
     val isUser: Boolean,
     val hasImage: Boolean = false,
+    val imageUri: Uri? = null,
     val hasAudio: Boolean = false,
     val audioBytes: ByteArray? = null,
     val speedInfo: String? = null,
@@ -163,14 +169,12 @@ fun ChatScreen(
         if (text.isEmpty() && !hasAttach) return
         if (isLoading) return
 
-        val msgText = text.ifEmpty {
-            if (attachedImageUri != null) "Describe this image"
-            else ""
-        }
+        val msgText = text.ifEmpty { "" }
         messages.add(ChatMessage(
             text = msgText,
             isUser = true,
             hasImage = attachedImageUri != null,
+            imageUri = attachedImageUri,
             hasAudio = attachedAudioBytes != null,
             audioBytes = attachedAudioBytes,
         ))
@@ -191,11 +195,11 @@ fun ChatScreen(
                 val hasAttach = savedImageUri != null || savedAudioBytes != null
                 if (hasAttach) {
                     val contents = buildContents(context, text, savedImageUri, savedAudioBytes)
-                    val response = withContext(Dispatchers.IO) {
-                        conversation.sendMessage(contents)
+                    conversation.sendMessageAsync(contents).collect { chunk ->
+                        tokenCount++
+                        val existing = messages[pendingIndex]
+                        messages[pendingIndex] = existing.copy(text = existing.text + chunk.toString())
                     }
-                    messages[pendingIndex] = ChatMessage(text = response.toString(), isUser = false)
-                    tokenCount = 1
                 } else {
                     conversation.sendMessageAsync(text).collect { chunk ->
                         tokenCount++
@@ -611,7 +615,38 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                         )
                     }
 
-                    if (!(message.hasAudio && message.text.isEmpty())) {
+                    if (message.hasImage && message.imageUri != null) {
+                        val context = LocalContext.current
+                        val bitmap = remember(message.imageUri) {
+                            try {
+                                val input = context.contentResolver.openInputStream(message.imageUri)
+                                val options = BitmapFactory.Options().apply {
+                                    inSampleSize = 4
+                                }
+                                input?.use { BitmapFactory.decodeStream(it, null, options) }
+                            } catch (_: Exception) { null }
+                        }
+                        if (bitmap != null) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (message.isUser) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surfaceVariant,
+                            ) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Image",
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .widthIn(max = 260.dp)
+                                        .heightIn(max = 200.dp)
+                                        .clip(RoundedCornerShape(12.dp)),
+                                )
+                            }
+                        }
+                    }
+
+                    val showTextBubble = message.text.isNotEmpty() && !(message.hasAudio && message.text.isEmpty()) && !(message.hasImage && message.text == "Describe this image")
+                    if (showTextBubble || isStreaming) {
                         Surface(
                             shape = RoundedCornerShape(
                                 topStart = 16.dp, topEnd = 16.dp,
