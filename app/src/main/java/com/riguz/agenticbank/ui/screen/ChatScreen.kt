@@ -920,13 +920,20 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                             color = if (message.isUser) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.surfaceVariant,
                         ) {
-                            Text(
-                                text = displayText,
-                                color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            )
+                            if (message.isUser) {
+                                Text(
+                                    text = displayText,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                )
+                            } else {
+                                MarkdownText(
+                                    text = displayText,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                )
+                            }
                         }
                     } else if (isStreaming) {
                         Surface(
