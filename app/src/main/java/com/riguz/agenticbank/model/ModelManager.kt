@@ -212,11 +212,13 @@ class ModelManager(application: Application) : AndroidViewModel(application) {
 
     private fun tryInitializeEngine(modelPath: String, context: Application): Pair<Engine, String> {
         val visionBackend = Backend.CPU()
+        val audioBackend = Backend.CPU()
         return try {
             val gpuConfig = EngineConfig(
                 modelPath = modelPath,
                 backend = Backend.GPU(),
                 visionBackend = visionBackend,
+                audioBackend = audioBackend,
                 cacheDir = context.cacheDir.path,
             )
             val eng = Engine(gpuConfig)
@@ -227,6 +229,7 @@ class ModelManager(application: Application) : AndroidViewModel(application) {
                 modelPath = modelPath,
                 backend = Backend.CPU(),
                 visionBackend = visionBackend,
+                audioBackend = audioBackend,
                 cacheDir = context.cacheDir.path,
             )
             val eng = Engine(cpuConfig)

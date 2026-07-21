@@ -2,11 +2,16 @@ package com.riguz.agenticbank.ui.screen
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.MediaRecorder
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaPlayer
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -31,6 +36,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
@@ -61,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -78,12 +90,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.abs
 
 data class ChatMessage(
     val text: String,
     val isUser: Boolean,
     val hasImage: Boolean = false,
     val hasAudio: Boolean = false,
+    val audioBytes: ByteArray? = null,
     val speedInfo: String? = null,
 )
 
@@ -151,7 +165,6 @@ fun ChatScreen(
 
         val msgText = text.ifEmpty {
             if (attachedImageUri != null) "Describe this image"
-            else if (attachedAudioBytes != null) "[Voice message]"
             else ""
         }
         messages.add(ChatMessage(
@@ -159,6 +172,7 @@ fun ChatScreen(
             isUser = true,
             hasImage = attachedImageUri != null,
             hasAudio = attachedAudioBytes != null,
+            audioBytes = attachedAudioBytes,
         ))
         val savedImageUri = attachedImageUri
         val savedAudioBytes = attachedAudioBytes
@@ -212,6 +226,10 @@ fun ChatScreen(
             isRecording = false
             recordingSeconds = 0
             stopRecording()
+            scope.launch {
+                delay(100)
+                sendMessage()
+            }
             return
         }
         val hasPermission = ContextCompat.checkSelfPermission(
@@ -586,49 +604,36 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                     horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start,
                     modifier = Modifier.widthIn(max = 300.dp),
                 ) {
-                    if (message.hasAudio) {
+                    if (message.hasAudio && message.audioBytes != null) {
+                        VoiceMessagePlayer(
+                            audioBytes = message.audioBytes,
+                            isUser = message.isUser,
+                        )
+                    }
+
+                    if (!(message.hasAudio && message.text.isEmpty())) {
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(
+                                topStart = 16.dp, topEnd = 16.dp,
+                                bottomStart = if (message.isUser) 16.dp else 4.dp,
+                                bottomEnd = if (message.isUser) 4.dp else 16.dp,
+                            ),
                             color = if (message.isUser) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.surfaceVariant,
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text("\uD83C\uDF99\uFE0F", fontSize = 16.sp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    "Voice message",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
-                                            else MaterialTheme.colorScheme.onSurface,
-                                )
+                            val displayText = when {
+                                isStreaming -> "\u200B"
+                                message.text.isEmpty() -> "\u200B"
+                                else -> message.text
                             }
+                            Text(
+                                text = displayText,
+                                color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
+                                        else MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            )
                         }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(
-                            topStart = 16.dp, topEnd = 16.dp,
-                            bottomStart = if (message.isUser) 16.dp else 4.dp,
-                            bottomEnd = if (message.isUser) 4.dp else 16.dp,
-                        ),
-                        color = if (message.isUser) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.surfaceVariant,
-                    ) {
-                        val displayText = when {
-                            isStreaming -> "\u200B"
-                            message.text.isEmpty() -> "\u200B"
-                            else -> message.text
-                        }
-                        Text(
-                            text = displayText,
-                            color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        )
                     }
 
                     if (message.speedInfo != null) {
@@ -640,6 +645,164 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoiceMessagePlayer(audioBytes: ByteArray, isUser: Boolean) {
+    val context = LocalContext.current
+    var isPlaying by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(0f) }
+    var durationMs by remember { mutableIntStateOf(0) }
+    val mediaPlayer = remember { mutableStateOf<MediaPlayer?>(null) }
+
+    val waveformData = remember(audioBytes) {
+        val sampleCount = 28
+        val step = audioBytes.size / sampleCount
+        (0 until sampleCount).map { i ->
+            val idx = (i * step).coerceIn(0, audioBytes.size - 1)
+            val v = (audioBytes[idx].toInt() and 0xFF) - 128
+            (abs(v) / 128f).coerceIn(0.15f, 1f)
+        }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    val animatedProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "waveAnim",
+    )
+
+    DisposableEffect(audioBytes) {
+        onDispose {
+            try {
+                mediaPlayer.value?.release()
+            } catch (_: Exception) {}
+            mediaPlayer.value = null
+        }
+    }
+
+    fun startPlayback() {
+        try {
+            mediaPlayer.value?.release()
+            val tmpFile = File(context.cacheDir, "playback_${System.nanoTime()}.m4a")
+            tmpFile.writeBytes(audioBytes)
+            val mp = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
+                setDataSource(tmpFile.absolutePath)
+                prepare()
+                durationMs = duration
+                start()
+            }
+            mediaPlayer.value = mp
+            isPlaying = true
+            progress = 0f
+
+            val poll = object : java.util.TimerTask() {
+                override fun run() {
+                    try {
+                        if (mp.isPlaying) {
+                            progress = mp.currentPosition.toFloat() / mp.duration.coerceAtLeast(1)
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            val timer = java.util.Timer()
+            timer.scheduleAtFixedRate(poll, 50, 50)
+
+            mp.setOnCompletionListener {
+                isPlaying = false
+                progress = 0f
+                timer.cancel()
+                try { tmpFile.delete() } catch (_: Exception) {}
+                try { mp.release() } catch (_: Exception) {}
+                mediaPlayer.value = null
+            }
+        } catch (e: Exception) {
+            Log.e("VoicePlayer", "Playback failed", e)
+            isPlaying = false
+        }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isUser) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.clickable {
+            if (isPlaying) {
+                try {
+                    mediaPlayer.value?.pause()
+                    isPlaying = false
+                } catch (_: Exception) {}
+            } else {
+                startPlayback()
+            }
+        },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (isPlaying) "\u23F8" else "\u25B6",
+                fontSize = 16.sp,
+                color = if (isUser) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            val activeBarColor = if (isUser) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.primary
+            val inactiveBarColor = if (isUser) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            Canvas(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(24.dp),
+            ) {
+                val barCount = waveformData.size
+                val barWidth = size.width / (barCount * 1.8f)
+                val gap = barWidth * 0.8f
+                val centerY = size.height / 2f
+                val progressIdx = (progress * barCount).toInt()
+
+                for (i in 0 until barCount) {
+                    val x = i * (barWidth + gap)
+                    val amplitude = if (isPlaying && i <= progressIdx) {
+                        waveformData[i] * (0.6f + 0.4f * animatedProgress)
+                    } else {
+                        waveformData[i] * 0.5f
+                    }
+                    val barHeight = amplitude * size.height
+                    val barColor = if (isPlaying && i <= progressIdx) activeBarColor
+                    else inactiveBarColor
+                    drawLine(
+                        color = barColor,
+                        start = Offset(x + barWidth / 2f, centerY - barHeight / 2f),
+                        end = Offset(x + barWidth / 2f, centerY + barHeight / 2f),
+                        strokeWidth = barWidth,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    )
+                }
+            }
+            if (durationMs > 0) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "%d:%02d".format(durationMs / 1000 / 60, durationMs / 1000 % 60),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isUser) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -660,7 +823,17 @@ private fun buildContents(
         }
     }
 
-    val effectiveText = if (text.isBlank() && audioBytes != null) "[Voice message]" else text
+    if (audioBytes != null) {
+        contents.add(Content.AudioBytes(audioBytes))
+    }
+
+    val effectiveText = text.ifBlank {
+        when {
+            imageUri != null -> "Describe this image"
+            audioBytes != null -> "Respond to this voice message"
+            else -> ""
+        }
+    }
     if (effectiveText.isNotBlank()) {
         contents.add(Content.Text(effectiveText))
     }
@@ -668,49 +841,103 @@ private fun buildContents(
     return Contents.of(contents.toList())
 }
 
-private var mediaRecorder: MediaRecorder? = null
-
-private fun startRecording(context: android.content.Context, onDone: (ByteArray) -> Unit) {
-    val file = File(context.cacheDir, "audio_${System.currentTimeMillis()}.m4a")
-    mediaRecorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-        MediaRecorder(context)
-    } else {
-        @Suppress("DEPRECATION")
-        MediaRecorder()
-    }.apply {
-        setAudioSource(MediaRecorder.AudioSource.MIC)
-        setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-        setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-        setOutputFile(file.absolutePath)
-        try {
-            prepare()
-            start()
-        } catch (e: Exception) {
-            release()
-            throw e
-        }
-    }
-    pendingAudioFile = file
-    pendingAudioCallback = onDone
-}
-
-private var pendingAudioFile: File? = null
+private var audioRecord: AudioRecord? = null
+private var isRecordingActive = false
 private var pendingAudioCallback: ((ByteArray) -> Unit)? = null
 
-private fun stopRecording() {
-    try {
-        mediaRecorder?.apply {
-            try { stop() } catch (_: Exception) {}
-            release()
+private const val SAMPLE_RATE = 16000
+private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+
+private fun startRecording(context: android.content.Context, onDone: (ByteArray) -> Unit) {
+    val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+    val record = AudioRecord(
+        android.media.MediaRecorder.AudioSource.MIC,
+        SAMPLE_RATE,
+        CHANNEL_CONFIG,
+        AUDIO_FORMAT,
+        bufferSize * 2,
+    )
+    if (record.state != AudioRecord.STATE_INITIALIZED) {
+        record.release()
+        return
+    }
+    audioRecord = record
+    isRecordingActive = true
+    pendingAudioCallback = onDone
+
+    Thread {
+        val pcmData = mutableListOf<Byte>()
+        val buffer = ByteArray(bufferSize)
+        record.startRecording()
+        while (isRecordingActive) {
+            val read = record.read(buffer, 0, buffer.size)
+            if (read > 0) {
+                pcmData.addAll(buffer.take(read))
+            }
         }
-        mediaRecorder = null
-        val file = pendingAudioFile
-        val callback = pendingAudioCallback
-        pendingAudioFile = null
+        record.stop()
+        record.release()
+        audioRecord = null
+
+        val pcmBytes = pcmData.toByteArray()
+        val wavBytes = encodeToWav(pcmBytes, SAMPLE_RATE, 1, 16)
+        pendingAudioCallback?.invoke(wavBytes)
         pendingAudioCallback = null
-        if (file != null && file.exists() && callback != null) {
-            callback(file.readBytes())
-            file.delete()
-        }
-    } catch (_: Exception) {}
+    }.start()
+}
+
+private fun stopRecording() {
+    isRecordingActive = false
+}
+
+private fun encodeToWav(pcmData: ByteArray, sampleRate: Int, channels: Int, bitsPerSample: Int): ByteArray {
+    val byteRate = sampleRate * channels * bitsPerSample / 8
+    val blockAlign = channels * bitsPerSample / 8
+    val dataSize = pcmData.size
+    val totalSize = 36 + dataSize
+
+    val header = ByteArray(44)
+    // RIFF header
+    header[0] = 'R'.code.toByte()
+    header[1] = 'I'.code.toByte()
+    header[2] = 'F'.code.toByte()
+    header[3] = 'F'.code.toByte()
+    writeInt(header, 4, totalSize)
+    header[8] = 'W'.code.toByte()
+    header[9] = 'A'.code.toByte()
+    header[10] = 'V'.code.toByte()
+    header[11] = 'E'.code.toByte()
+    // fmt subchunk
+    header[12] = 'f'.code.toByte()
+    header[13] = 'm'.code.toByte()
+    header[14] = 't'.code.toByte()
+    header[15] = ' '.code.toByte()
+    writeInt(header, 16, 16) // subchunk1 size
+    writeShort(header, 20, 1) // PCM format
+    writeShort(header, 22, channels)
+    writeInt(header, 24, sampleRate)
+    writeInt(header, 28, byteRate)
+    writeShort(header, 32, blockAlign)
+    writeShort(header, 34, bitsPerSample)
+    // data subchunk
+    header[36] = 'd'.code.toByte()
+    header[37] = 'a'.code.toByte()
+    header[38] = 't'.code.toByte()
+    header[39] = 'a'.code.toByte()
+    writeInt(header, 40, dataSize)
+
+    return header + pcmData
+}
+
+private fun writeInt(buffer: ByteArray, offset: Int, value: Int) {
+    buffer[offset] = (value and 0xFF).toByte()
+    buffer[offset + 1] = ((value shr 8) and 0xFF).toByte()
+    buffer[offset + 2] = ((value shr 16) and 0xFF).toByte()
+    buffer[offset + 3] = ((value shr 24) and 0xFF).toByte()
+}
+
+private fun writeShort(buffer: ByteArray, offset: Int, value: Int) {
+    buffer[offset] = (value and 0xFF).toByte()
+    buffer[offset + 1] = ((value shr 8) and 0xFF).toByte()
 }
