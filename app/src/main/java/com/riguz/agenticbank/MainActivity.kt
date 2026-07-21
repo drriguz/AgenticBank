@@ -26,11 +26,12 @@ import com.riguz.agenticbank.ui.screen.ChatScreen
 import com.riguz.agenticbank.ui.screen.PdfViewerScreen
 import com.riguz.agenticbank.ui.screen.SplashScreen
 import com.riguz.agenticbank.ui.screen.StructuredProductScreen
+import com.riguz.agenticbank.ui.screen.SubscriptionScreen
 import com.riguz.agenticbank.ui.theme.AgenticBankTheme
 import java.io.ByteArrayOutputStream
 import java.io.File
 
-enum class Screen { Splash, Chat, Home, StructuredProduct, PdfViewer, ProductChat }
+enum class Screen { Splash, Chat, Home, StructuredProduct, PdfViewer, ProductChat, Subscription }
 
 private val PRODUCT_SYSTEM_PROMPT = """
 You are a professional banking product advisor agent for the following structured deposit product:
@@ -63,7 +64,7 @@ When the user asks to calculate returns or subscribe, you MUST use the appropria
 - Always use tools for calculations and confirmations
 - Be professional, concise, and helpful
 - If the user's intent is unclear, ask clarifying questions
-- When speaking Chinese, respond in Chinese; when speaking English, respond in English
+- ALWAYS respond in English, regardless of the language the user uses
 - Don't ask user to provide termsheets or any other product related info
 """.trimIndent()
 
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
 fun MainApp() {
     val modelManager: ModelManager = viewModel()
     var currentScreen by remember { mutableStateOf(Screen.Splash) }
+    var subscriptionAmount by remember { mutableStateOf(0.0) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -163,12 +165,28 @@ fun MainApp() {
                         title = "Product Advisor",
                         systemPrompt = PRODUCT_SYSTEM_PROMPT,
                         termsheetPages = termsheetPages,
+                        onSubscribe = { amount ->
+                            subscriptionAmount = amount
+                            currentScreen = Screen.Subscription
+                        },
                     )
                 }
                 else -> {
                     currentScreen = Screen.Splash
                 }
             }
+        }
+
+        Screen.Subscription -> {
+            BackHandler { currentScreen = Screen.ProductChat }
+            SubscriptionScreen(
+                amount = subscriptionAmount,
+                onBack = { currentScreen = Screen.ProductChat },
+                onConfirm = {
+                    currentScreen = Screen.Home
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

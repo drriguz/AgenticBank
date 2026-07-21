@@ -60,9 +60,11 @@ import androidx.compose.material.icons.filled.KeyboardVoice
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -135,6 +137,7 @@ fun ChatScreen(
     title: String = "AI Assistant",
     systemPrompt: String = "You are a professional banking assistant. Answer concisely and helpfully.",
     termsheetPages: List<ByteArray>? = null,
+    onSubscribe: (Double) -> Unit = {},
 ) {
     val context = LocalContext.current
     val messages = remember { mutableStateListOf<ChatMessage>() }
@@ -292,14 +295,6 @@ fun ChatScreen(
                         
                         // Debug: log the arguments
                         android.util.Log.d("ToolCall", "Tool: $toolName, Args: $args")
-                        
-                        // Show friendly tool message
-                        val friendlyMessage = when (toolName) {
-                            "calculate_return" -> "正在计算收益..."
-                            "show_confirmation" -> "正在准备认购确认..."
-                            else -> "正在执行 $toolName..."
-                        }
-                        messages.add(ChatMessage(text = friendlyMessage, isUser = false))
                         
                         // Convert args map to JSONObject properly
                         val params = org.json.JSONObject()
@@ -584,6 +579,7 @@ fun ChatScreen(
                         message = message,
                         isStreaming = isLoading && !message.isUser && message == messages.lastOrNull() && message.text.isEmpty(),
                         backendName = backendName,
+                        onSubscribe = onSubscribe,
                     )
                 }
             }
@@ -791,7 +787,7 @@ fun ChatScreen(
 }
 
 @Composable
-private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName: String) {
+private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName: String, onSubscribe: (Double) -> Unit = {}) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(4.dp))
         Column(
@@ -935,7 +931,7 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                         Spacer(modifier = Modifier.height(8.dp))
                         when (val result = message.toolResult) {
                             is ToolResult.CalculationResult -> CalculationCard(result)
-                            is ToolResult.SubscriptionConfirmation -> ConfirmationCard(result)
+                            is ToolResult.SubscriptionConfirmation -> ConfirmationCard(result, onSubscribe)
                             is ToolResult.Error -> ErrorCard(result.message)
                             else -> {}
                         }
@@ -997,7 +993,7 @@ private fun CalculationRow(label: String, value: String, isHighlight: Boolean = 
 }
 
 @Composable
-private fun ConfirmationCard(result: ToolResult.SubscriptionConfirmation) {
+private fun ConfirmationCard(result: ToolResult.SubscriptionConfirmation, onSubscribe: (Double) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -1007,29 +1003,38 @@ private fun ConfirmationCard(result: ToolResult.SubscriptionConfirmation) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "\uD83D\uDCDD 认购确认",
+                text = "\uD83D\uDCDD Subscription Confirmation",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
             )
             Spacer(modifier = Modifier.height(12.dp))
-            ConfirmationRow("产品编号", result.productId)
-            ConfirmationRow("产品名称", result.productName)
+            ConfirmationRow("Product ID", result.productId)
+            ConfirmationRow("Product Name", result.productName)
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            ConfirmationRow("投资金额", "USD %,.0f".format(result.investmentAmount))
-            ConfirmationRow("投资期限", "%d 个月".format(result.tenorMonths))
-            ConfirmationRow("风险等级", "%d (高)".format(result.riskRating))
-            ConfirmationRow("本金保护", result.principalProtection)
+            ConfirmationRow("Investment Amount", "USD %,.0f".format(result.investmentAmount))
+            ConfirmationRow("Tenor", "%d Months".format(result.tenorMonths))
+            ConfirmationRow("Risk Rating", "%d (High)".format(result.riskRating))
+            ConfirmationRow("Principal Protection", result.principalProtection)
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            ConfirmationRow("预期收益", "USD %,.2f".format(result.expectedReturn), isHighlight = true)
-            ConfirmationRow("到期日", result.maturityDate)
-            ConfirmationRow("到期总额", "USD %,.2f".format(result.totalPayout), isHighlight = true)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "请确认以上信息无误后，回复「确认认购」完成认购。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
-            )
+            ConfirmationRow("Expected Return", "USD %,.2f".format(result.expectedReturn), isHighlight = true)
+            ConfirmationRow("Maturity Date", result.maturityDate)
+            ConfirmationRow("Total Payout", "USD %,.2f".format(result.totalPayout), isHighlight = true)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { onSubscribe(result.investmentAmount) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                ),
+            ) {
+                Text(
+                    text = "Proceed to Subscription",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }
