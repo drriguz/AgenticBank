@@ -18,17 +18,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +57,7 @@ import androidx.compose.ui.unit.dp
 fun StructuredProductScreen(
     onBack: () -> Unit,
     onViewTermsheet: () -> Unit,
+    onChatClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
@@ -72,6 +76,18 @@ fun StructuredProductScreen(
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                 ),
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onChatClick,
+                containerColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Chat,
+                    contentDescription = "Ask about this product",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
         },
         modifier = modifier,
     ) { innerPadding ->
@@ -271,7 +287,7 @@ private fun UnderlyingSection() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                Icons.Default.TrendingUp,
+                Icons.AutoMirrored.Filled.TrendingUp,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),

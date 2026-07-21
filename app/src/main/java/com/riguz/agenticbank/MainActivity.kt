@@ -20,11 +20,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.riguz.agenticbank.model.ModelManager
 import com.riguz.agenticbank.ui.screen.ChatScreen
 import com.riguz.agenticbank.ui.screen.PdfViewerScreen
+import com.riguz.agenticbank.ui.screen.ProductChatScreen
 import com.riguz.agenticbank.ui.screen.SplashScreen
 import com.riguz.agenticbank.ui.screen.StructuredProductScreen
 import com.riguz.agenticbank.ui.theme.AgenticBankTheme
 
-enum class Screen { Splash, Chat, Home, StructuredProduct, PdfViewer }
+enum class Screen { Splash, Chat, Home, StructuredProduct, PdfViewer, ProductChat }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -94,6 +95,7 @@ fun MainApp() {
             StructuredProductScreen(
                 onBack = { currentScreen = Screen.Home },
                 onViewTermsheet = { currentScreen = Screen.PdfViewer },
+                onChatClick = { currentScreen = Screen.ProductChat },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -104,6 +106,23 @@ fun MainApp() {
                 onBack = { currentScreen = Screen.StructuredProduct },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+
+        Screen.ProductChat -> {
+            BackHandler { currentScreen = Screen.StructuredProduct }
+            val modelState by modelManager.state.collectAsStateWithLifecycle()
+            when (val s = modelState) {
+                is ModelManager.State.Ready -> {
+                    ProductChatScreen(
+                        engine = s.engine,
+                        onBack = { currentScreen = Screen.StructuredProduct },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                else -> {
+                    currentScreen = Screen.Splash
+                }
+            }
         }
     }
 }
