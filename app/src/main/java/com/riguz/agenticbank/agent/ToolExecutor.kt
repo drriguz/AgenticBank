@@ -105,11 +105,11 @@ object ToolExecutor {
 
     private fun calculateReturn(params: JSONObject): ToolResult {
         val amount = params.optDouble("amount", 0.0)
-        if (amount < 10000) {
-            return ToolResult.Error("Minimum investment is USD 10,000")
+        if (amount < 50000) {
+            return ToolResult.Error("Minimum investment is USD 50,000")
         }
-        if (amount % 1000 != 0.0) {
-            return ToolResult.Error("Investment must be in increments of USD 1,000")
+        if (amount % 10000 != 0.0) {
+            return ToolResult.Error("Investment must be in increments of USD 10,000")
         }
 
         val tenorMonths = params.optInt("tenor_months", 12)
@@ -148,7 +148,7 @@ object ToolExecutor {
 
         return ToolResult.SubscriptionConfirmation(
             productId = "MALI260710BLU02BD",
-            productName = "MALI - Non Principal Protected - BD - 1",
+            productName = "Non Principal Protected - BD - 1",
             investmentAmount = amount,
             tenorMonths = tenorMonths,
             riskRating = 5,

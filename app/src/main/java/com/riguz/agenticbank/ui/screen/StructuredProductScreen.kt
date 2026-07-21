@@ -162,7 +162,7 @@ private fun ProductBanner() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "MALI - Non Principal Protected - BD - 1",
+                text = "Non Principal Protected - BD - 1",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
             )

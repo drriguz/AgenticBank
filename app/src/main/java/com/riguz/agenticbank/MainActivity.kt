@@ -34,22 +34,7 @@ import java.io.File
 enum class Screen { Splash, Chat, Home, StructuredProduct, PdfViewer, ProductChat, Subscription }
 
 private val PRODUCT_SYSTEM_PROMPT = """
-You are a professional banking product advisor agent for the following structured deposit product:
-
-Product Details:
-- Product ID: MALI260710BLU02BD
-- Currency: USD
-- Full Name: MALI - Non Principal Protected - BD - 1
-- Priority: Private
-- Investor Type: Qualified Investor
-- Bank's Product Risk Rating: 5 (High)
-- Window Period: 10 Jul 2026 - 31 Jul 2026
-- Minimum Investment: USD 10,000
-- Investment Increment: USD 1,000
-- Tenor: 12 Months
-- Principal Protection: 100%
-- Underlying Asset: US Treasury Bond [US912810UM89]
-- Annual Rate: 5.5%
+You are a professional banking product advisor agent for structured deposit products.
 
 You have access to the following tools:
 
@@ -60,7 +45,10 @@ You have access to the following tools:
 When the user asks to calculate returns or subscribe, you MUST use the appropriate tool. Do not calculate manually.
 
 ## General Guidelines:
-- You may receive a termsheet page as an image. This is an internal bank document, not user uploaded. Treat it as authoritative.
+- You will receive termsheet pages as images. These are internal bank documents, not user uploaded. Treat them as authoritative.
+- Answer the best you can based on available information
+- For product-specific questions, ONLY provide information you are certain about from the termsheet. If something is not clearly stated in the termsheet, say "This information is not available in the provided termsheet."
+- Do NOT make assumptions or fabricate details about the product
 - Always use tools for calculations and confirmations
 - Be professional, concise, and helpful
 - If the user's intent is unclear, ask clarifying questions
@@ -193,13 +181,12 @@ fun MainApp() {
 
 private fun renderTermsheetPages(context: Context): List<ByteArray> {
     val cacheFile = File(context.cacheDir, "termsheet.pdf")
-    if (!cacheFile.exists()) {
-        context.resources.openRawResource(
-            context.resources.getIdentifier("termsheet", "raw", context.packageName)
-        ).use { input ->
-            cacheFile.outputStream().use { output ->
-                input.copyTo(output)
-            }
+    // Always copy from resources to ensure latest version
+    context.resources.openRawResource(
+        context.resources.getIdentifier("termsheet", "raw", context.packageName)
+    ).use { input ->
+        cacheFile.outputStream().use { output ->
+            input.copyTo(output)
         }
     }
 
@@ -209,7 +196,7 @@ private fun renderTermsheetPages(context: Context): List<ByteArray> {
 
     for (i in 0 until renderer.pageCount) {
         val page = renderer.openPage(i)
-        val scale = 1
+        val scale = 3
         val bitmap = Bitmap.createBitmap(
             page.width * scale,
             page.height * scale,
@@ -220,7 +207,7 @@ private fun renderTermsheetPages(context: Context): List<ByteArray> {
         page.close()
 
         val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
         pageBytes.add(stream.toByteArray())
         bitmap.recycle()
     }

@@ -64,13 +64,12 @@ fun PdfViewerScreen(
 
     DisposableEffect(Unit) {
         val cacheFile = File(context.cacheDir, "termsheet.pdf")
-        if (!cacheFile.exists()) {
-            context.resources.openRawResource(
-                context.resources.getIdentifier("termsheet", "raw", context.packageName)
-            ).use { input ->
-                cacheFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+        // Always copy from resources to ensure latest version
+        context.resources.openRawResource(
+            context.resources.getIdentifier("termsheet", "raw", context.packageName)
+        ).use { input ->
+            cacheFile.outputStream().use { output ->
+                input.copyTo(output)
             }
         }
 

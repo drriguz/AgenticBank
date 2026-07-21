@@ -25,14 +25,13 @@ class CalculateReturnTool : OpenApiTool {
 
     override fun execute(paramsJsonString: String): String {
         val params = JSONObject(paramsJsonString)
-        // Handle both Int and Double types
-        val amount = when (val rawAmount = params.opt("amount")) {
-            is Number -> rawAmount.toDouble()
-            is String -> rawAmount.replace(",", "").toDoubleOrNull() ?: 0.0
-            else -> 0.0
-        }
+        // Handle various amount formats: Number, String with commas, etc.
+        val rawAmount = params.opt("amount")
+        android.util.Log.d("CalculateReturnTool", "Raw amount: $rawAmount (type: ${rawAmount?.javaClass?.name})")
         
-        android.util.Log.d("CalculateReturnTool", "Input amount: $amount (raw: ${params.opt("amount")})")
+        val amount = parseAmount(rawAmount)
+        
+        android.util.Log.d("CalculateReturnTool", "Parsed amount: $amount")
         
         if (amount < 10000) {
             return """{"error": "Minimum investment is USD 10,000"}"""
@@ -69,7 +68,7 @@ class ShowConfirmationTool : OpenApiTool {
                 "properties": {
                     "amount": {
                         "type": "number",
-                        "description": "Investment amount in USD (minimum 10000). Example: 200000 for two hundred thousand dollars."
+                        "description": "Investment amount in USD (minimum 10000). Example: 50000 for fifty thousand dollars."
                     }
                 },
                 "required": ["amount"]
@@ -80,14 +79,13 @@ class ShowConfirmationTool : OpenApiTool {
 
     override fun execute(paramsJsonString: String): String {
         val params = JSONObject(paramsJsonString)
-        // Handle both Int and Double types
-        val amount = when (val rawAmount = params.opt("amount")) {
-            is Number -> rawAmount.toDouble()
-            is String -> rawAmount.replace(",", "").toDoubleOrNull() ?: 0.0
-            else -> 0.0
-        }
+        // Handle various amount formats: Number, String with commas, etc.
+        val rawAmount = params.opt("amount")
+        android.util.Log.d("ShowConfirmationTool", "Raw amount: $rawAmount (type: ${rawAmount?.javaClass?.name})")
         
-        android.util.Log.d("ShowConfirmationTool", "Input amount: $amount (raw: ${params.opt("amount")})")
+        val amount = parseAmount(rawAmount)
+        
+        android.util.Log.d("ShowConfirmationTool", "Parsed amount: $amount")
         
         if (amount < 10000) {
             return """{"error": "Minimum investment is USD 10,000"}"""
@@ -110,5 +108,22 @@ class ShowConfirmationTool : OpenApiTool {
             "total_payout": $totalPayout
         }
         """.trimIndent()
+    }
+}
+
+private fun parseAmount(rawAmount: Any?): Double {
+    return when (rawAmount) {
+        is Number -> rawAmount.toDouble()
+        is String -> {
+            // Remove commas, spaces, and currency symbols
+            val cleaned = rawAmount
+                .replace(",", "")
+                .replace(" ", "")
+                .replace("USD", "", ignoreCase = true)
+                .replace("$", "")
+                .trim()
+            cleaned.toDoubleOrNull() ?: 0.0
+        }
+        else -> 0.0
     }
 }
