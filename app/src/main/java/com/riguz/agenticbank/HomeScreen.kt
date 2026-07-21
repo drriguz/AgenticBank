@@ -53,10 +53,15 @@ val demoCases = listOf(
 @Composable
 fun HomeScreen(
     onChatClick: () -> Unit = {},
+    onStructuredProductClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val cases = demoCases.mapIndexed { index, demo ->
-        if (index == 0) demo.copy(onClick = onChatClick) else demo
+        when (index) {
+            0 -> demo.copy(onClick = onChatClick)
+            1 -> demo.copy(onClick = onStructuredProductClick)
+            else -> demo
+        }
     }
 
     Scaffold(
