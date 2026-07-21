@@ -325,27 +325,23 @@ fun ChatScreen(
                     MessageItem(
                         message = message,
                         isStreaming = isLoading && !message.isUser && message == messages.lastOrNull() && message.text.isEmpty(),
+                        backendName = backendName,
                     )
                 }
 
                 if (isLoading && messages.lastOrNull()?.text?.isEmpty() == true && !messages.lastOrNull()!!.isUser) {
                     item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.Start,
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.Start,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text("\uD83E\uDD16", fontSize = 14.sp)
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Model on $backendName",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 2.dp),
+                            )
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp))
@@ -567,102 +563,82 @@ fun ChatScreen(
 }
 
 @Composable
-private fun MessageItem(message: ChatMessage, isStreaming: Boolean) {
+private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName: String) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(4.dp))
-        Row(
+        Column(
+            horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start,
-            verticalAlignment = Alignment.Top,
         ) {
-            if (!message.isUser) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("\uD83E\uDD16", fontSize = 14.sp)
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-
-            Column(
-                horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start,
-                modifier = Modifier.widthIn(max = 300.dp),
+            Text(
+                text = if (message.isUser) "YOU" else "Model on $backendName",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
+            Row(
+                horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start,
+                verticalAlignment = Alignment.Top,
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                if (message.hasAudio) {
+                Column(
+                    horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start,
+                    modifier = Modifier.widthIn(max = 300.dp),
+                ) {
+                    if (message.hasAudio) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (message.isUser) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("\uD83C\uDF99\uFE0F", fontSize = 16.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    "Voice message",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    }
+
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(
+                            topStart = 16.dp, topEnd = 16.dp,
+                            bottomStart = if (message.isUser) 16.dp else 4.dp,
+                            bottomEnd = if (message.isUser) 4.dp else 16.dp,
+                        ),
                         color = if (message.isUser) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.surfaceVariant,
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("\uD83C\uDF99\uFE0F", fontSize = 16.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "Voice message",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurface,
-                            )
+                        val displayText = when {
+                            isStreaming -> "\u200B"
+                            message.text.isEmpty() -> "\u200B"
+                            else -> message.text
                         }
+                        Text(
+                            text = displayText,
+                            color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        )
                     }
-                }
 
-                Surface(
-                    shape = RoundedCornerShape(
-                        topStart = 16.dp, topEnd = 16.dp,
-                        bottomStart = if (message.isUser) 16.dp else 4.dp,
-                        bottomEnd = if (message.isUser) 4.dp else 16.dp,
-                    ),
-                    color = if (message.isUser) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                ) {
-                    val displayText = when {
-                        isStreaming -> "\u200B"
-                        message.text.isEmpty() -> "\u200B"
-                        else -> message.text
+                    if (message.speedInfo != null) {
+                        Text(
+                            text = message.speedInfo,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                        )
                     }
-                    Text(
-                        text = displayText,
-                        color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
-                                else MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    )
-                }
-
-                if (message.speedInfo != null) {
-                    Text(
-                        text = message.speedInfo,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-                    )
-                }
-            }
-
-            if (message.isUser) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "You",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                    )
                 }
             }
         }
