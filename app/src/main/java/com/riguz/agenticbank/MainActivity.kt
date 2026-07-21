@@ -3,6 +3,7 @@ package com.riguz.agenticbank
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -61,6 +62,7 @@ fun MainApp() {
         }
 
         Screen.Chat -> {
+            BackHandler { currentScreen = Screen.Home }
             val modelState by modelManager.state.collectAsStateWithLifecycle()
             when (val s = modelState) {
                 is ModelManager.State.Ready -> {
