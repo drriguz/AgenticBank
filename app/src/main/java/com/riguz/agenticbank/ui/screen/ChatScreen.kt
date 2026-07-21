@@ -6,6 +6,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaPlayer
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
@@ -151,7 +152,7 @@ fun ChatScreen(
     var isRecording by remember { mutableStateOf(false) }
     var isVoiceMode by remember { mutableStateOf(false) }
     var recordingSeconds by remember { mutableIntStateOf(0) }
-    var selectedTermsheetPage by remember { mutableStateOf<Int?>(null) }
+    var selectedTermsheetPages by remember { mutableStateOf(setOf<Int>()) }
     var showTermsheetPicker by remember { mutableStateOf(false) }
 
     val calculateReturnTool = remember { CalculateReturnTool() }
@@ -210,30 +211,41 @@ fun ChatScreen(
     fun sendMessage() {
         val text = inputText.trim()
         val hasAttach = attachedImageUri != null || attachedAudioBytes != null
-        val hasTermsheet = selectedTermsheetPage != null && termsheetPages != null
+        val hasTermsheet = selectedTermsheetPages.isNotEmpty() && termsheetPages != null
         if (text.isEmpty() && !hasAttach && !hasTermsheet) return
         if (isLoading) return
 
-        val termsheetPageBytes = if (hasTermsheet) termsheetPages!![selectedTermsheetPage!!] else null
+        val termsheetPagesToSend = if (hasTermsheet) {
+            selectedTermsheetPages.map { termsheetPages!![it] }
+        } else {
+            emptyList()
+        }
+
+        // Merge pages into single image for display
+        val mergedTermsheetBytes = if (termsheetPagesToSend.size > 1) {
+            mergePagesToSingleImage(termsheetPagesToSend)
+        } else {
+            termsheetPagesToSend.firstOrNull()
+        }
 
         val msgText = text.ifEmpty { "" }
         messages.add(ChatMessage(
             text = msgText,
             isUser = true,
-            hasImage = attachedImageUri != null || termsheetPageBytes != null,
+            hasImage = attachedImageUri != null || mergedTermsheetBytes != null,
             imageUri = attachedImageUri,
-            imageBytesList = if (termsheetPageBytes != null) listOf(termsheetPageBytes) else emptyList(),
+            imageBytesList = if (mergedTermsheetBytes != null) listOf(mergedTermsheetBytes) else emptyList(),
             hasAudio = attachedAudioBytes != null,
             audioBytes = attachedAudioBytes,
         ))
         val savedImageUri = attachedImageUri
         val savedAudioBytes = attachedAudioBytes
-        val savedTermsheetPage = termsheetPageBytes
-        val savedPageIndex = selectedTermsheetPage
+        val savedTermsheetPagesList = termsheetPagesToSend
+        val savedPageIndices = selectedTermsheetPages
         inputText = ""
         attachedImageUri = null
         attachedAudioBytes = null
-        selectedTermsheetPage = null
+        selectedTermsheetPages = emptySet()
         isLoading = true
 
         val pendingIndex = messages.size
@@ -244,9 +256,17 @@ fun ChatScreen(
             var tokenCount = 0
             try {
                 val contents = mutableListOf<Content>()
-                if (savedTermsheetPage != null) {
-                    contents.add(Content.ImageBytes(savedTermsheetPage))
+                
+                // Merge termsheet pages into a single long image
+                if (savedTermsheetPagesList.isNotEmpty()) {
+                    val mergedBytes = withContext(Dispatchers.Default) {
+                        mergePagesToSingleImage(savedTermsheetPagesList)
+                    }
+                    if (mergedBytes != null) {
+                        contents.add(Content.ImageBytes(mergedBytes))
+                    }
                 }
+                
                 if (savedImageUri != null) {
                     val imageBytes = context.contentResolver.openInputStream(savedImageUri)?.readBytes()
                     if (imageBytes != null) contents.add(Content.ImageBytes(imageBytes))
@@ -258,7 +278,7 @@ fun ChatScreen(
                     when {
                         savedImageUri != null -> "Describe this image"
                         savedAudioBytes != null -> "Respond to this voice message"
-                        savedTermsheetPage != null -> "This is page ${savedPageIndex!! + 1} of the product termsheet provided by the bank for internal reference. Use it to answer questions about this product."
+                        savedTermsheetPagesList.isNotEmpty() -> "This is the product termsheet (pages ${savedPageIndices.map { it + 1 }.joinToString(", ")}) provided by the bank for internal reference. Use it to answer questions about this product."
                         else -> ""
                     }
                 }
@@ -430,7 +450,7 @@ fun ChatScreen(
                     Surface(
                         onClick = { showTermsheetPicker = true },
                         shape = RoundedCornerShape(16.dp),
-                        color = if (selectedTermsheetPage != null) MaterialTheme.colorScheme.primary
+                        color = if (selectedTermsheetPages.isNotEmpty()) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.surfaceVariant,
                     ) {
                         Row(
@@ -441,15 +461,17 @@ fun ChatScreen(
                                 Icons.Default.Description,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = if (selectedTermsheetPage != null) MaterialTheme.colorScheme.onPrimary
+                                tint = if (selectedTermsheetPages.isNotEmpty()) MaterialTheme.colorScheme.onPrimary
                                        else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (selectedTermsheetPage != null) "Page ${selectedTermsheetPage!! + 1}" else "Termsheet",
+                                text = if (selectedTermsheetPages.isNotEmpty()) {
+                                    "${selectedTermsheetPages.size} page${if (selectedTermsheetPages.size > 1) "s" else ""}"
+                                } else "Termsheet",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Medium,
-                                color = if (selectedTermsheetPage != null) MaterialTheme.colorScheme.onPrimary
+                                color = if (selectedTermsheetPages.isNotEmpty()) MaterialTheme.colorScheme.onPrimary
                                         else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -464,7 +486,7 @@ fun ChatScreen(
                     text = {
                         Column {
                             Text(
-                                "Choose a page to include in the conversation:",
+                                "Select pages to include (tap to toggle):",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -481,11 +503,14 @@ fun ChatScreen(
                                     val bitmap = remember(pageBytes) {
                                         BitmapFactory.decodeByteArray(pageBytes, 0, pageBytes.size)
                                     }
-                                    val isSelected = selectedTermsheetPage == index
+                                    val isSelected = selectedTermsheetPages.contains(index)
                                     Surface(
                                         onClick = {
-                                            selectedTermsheetPage = index
-                                            showTermsheetPicker = false
+                                            selectedTermsheetPages = if (isSelected) {
+                                                selectedTermsheetPages - index
+                                            } else {
+                                                selectedTermsheetPages + index
+                                            }
                                         },
                                         shape = RoundedCornerShape(8.dp),
                                         border = androidx.compose.foundation.BorderStroke(
@@ -513,6 +538,7 @@ fun ChatScreen(
                                                 text = "Page ${index + 1}",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) primaryColor else MaterialTheme.colorScheme.onSurface,
                                             )
                                         }
                                     }
@@ -522,7 +548,7 @@ fun ChatScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = {
-                            selectedTermsheetPage = null
+                            selectedTermsheetPages = emptySet()
                             showTermsheetPicker = false
                         }) {
                             Text("Clear")
@@ -1261,6 +1287,31 @@ private fun VoiceMessagePlayer(audioBytes: ByteArray, isUser: Boolean) {
             }
         }
     }
+}
+
+private fun mergePagesToSingleImage(pages: List<ByteArray>): ByteArray? {
+    if (pages.isEmpty()) return null
+    if (pages.size == 1) return pages.first()
+
+    val bitmaps = pages.map { BitmapFactory.decodeByteArray(it, 0, it.size) ?: return null }
+    val maxWidth = bitmaps.maxOf { it.width }
+    val totalHeight = bitmaps.sumOf { it.height }
+
+    val mergedBitmap = Bitmap.createBitmap(maxWidth, totalHeight, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(mergedBitmap)
+    canvas.drawColor(android.graphics.Color.WHITE)
+
+    var currentY = 0
+    for (bitmap in bitmaps) {
+        canvas.drawBitmap(bitmap, 0f, currentY.toFloat(), null)
+        currentY += bitmap.height
+        bitmap.recycle()
+    }
+
+    val stream = java.io.ByteArrayOutputStream()
+    mergedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+    mergedBitmap.recycle()
+    return stream.toByteArray()
 }
 
 private fun stripToolCallJson(text: String): String {
