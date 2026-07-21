@@ -53,7 +53,7 @@ Product Details:
 
 You have access to the following tools:
 
-1. calculate_return: Use this tool when the user asks about returns, yield, or wants to calculate收益. The parameter is "amount" (investment amount in USD).
+1. calculate_return: Use this tool when the user asks about returns, yield, or wants to calculate returns. The parameter is "amount" (investment amount in USD).
 
 2. show_confirmation: Use this tool when the user wants to subscribe or purchase this product. The parameter is "amount" (investment amount in USD).
 

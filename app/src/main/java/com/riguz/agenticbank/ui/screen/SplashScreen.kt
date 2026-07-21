@@ -137,41 +137,22 @@ fun SplashScreen(
 
 @Composable
 private fun LoadingContent(loading: ModelManager.State.Loading?, elapsed: Int) {
-    if (loading != null) {
-        LinearProgressIndicator(
-            progress = { loading.progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "${(loading.progress * 100).toInt()}%",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = loading.message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+    CircularProgressIndicator(
+        modifier = Modifier.size(48.dp),
+        strokeWidth = 4.dp,
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+    Text(
+        text = "Loading Gemma 4 E2B model...",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (elapsed > 0) {
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Elapsed: ${elapsed}s",
+            text = "${elapsed}s",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        )
-    } else {
-        CircularProgressIndicator(
-            modifier = Modifier.size(48.dp),
-            strokeWidth = 4.dp,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Preparing...",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

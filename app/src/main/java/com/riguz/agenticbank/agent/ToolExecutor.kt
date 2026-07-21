@@ -71,7 +71,7 @@ object ToolExecutor {
                 val amount = amountStr.toDoubleOrNull()
                 if (amount != null) {
                     // Determine tool based on context
-                    val tool = if (text.contains("认购") || text.contains("subscribe") || text.contains("confirm")) {
+                    val tool = if (text.contains("subscribe") || text.contains("purchase") || text.contains("confirm") || text.contains("认购")) {
                         "show_confirmation"
                     } else {
                         "calculate_return"
@@ -161,14 +161,14 @@ object ToolExecutor {
 
     fun formatCalculationResult(result: ToolResult.CalculationResult): String {
         return """
-            |📊 收益计算结果 (Return Calculation)
+            |📊 Return Calculation
             |━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            |投资金额 (Investment): USD %,.0f
-            |年化收益率 (Annual Rate): %.1f%%
-            |投资期限 (Tenor): %d 个月
-            |预期收益 (Expected Return): USD %,.2f
-            |到期日 (Maturity): %s
-            |到期总额 (Total Payout): USD %,.2f
+            |Investment Amount: USD %,.0f
+            |Annual Rate: %.1f%%
+            |Tenor: %d Months
+            |Expected Return: USD %,.2f
+            |Maturity Date: %s
+            |Total Payout: USD %,.2f
         """.trimMargin().format(
             result.investmentAmount,
             result.annualRate * 100,

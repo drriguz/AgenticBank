@@ -953,19 +953,19 @@ private fun CalculationCard(result: ToolResult.CalculationResult) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "\uD83D\uDCCA 收益计算结果",
+                text = "\uD83D\uDCCA Return Calculation",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Spacer(modifier = Modifier.height(12.dp))
-            CalculationRow("投资金额", "USD %,.0f".format(result.investmentAmount))
-            CalculationRow("年化收益率", "%.1f%%".format(result.annualRate * 100))
-            CalculationRow("投资期限", "%d 个月".format(result.tenorMonths))
+            CalculationRow("Investment Amount", "USD %,.0f".format(result.investmentAmount))
+            CalculationRow("Annual Rate", "%.1f%%".format(result.annualRate * 100))
+            CalculationRow("Tenor", "%d Months".format(result.tenorMonths))
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            CalculationRow("预期收益", "USD %,.2f".format(result.expectedReturn), isHighlight = true)
-            CalculationRow("到期日", result.maturityDate)
-            CalculationRow("到期总额", "USD %,.2f".format(result.totalPayout), isHighlight = true)
+            CalculationRow("Expected Return", "USD %,.2f".format(result.expectedReturn), isHighlight = true)
+            CalculationRow("Maturity Date", result.maturityDate)
+            CalculationRow("Total Payout", "USD %,.2f".format(result.totalPayout), isHighlight = true)
         }
     }
 }
@@ -1279,10 +1279,10 @@ private fun stripToolCallJson(text: String): String {
 
 private fun showToolResult(toolResult: ToolResult, messages: MutableList<ChatMessage>, pendingIndex: Int) {
     val toolMessage = when (toolResult) {
-        is ToolResult.CalculationResult -> "正在计算收益..."
-        is ToolResult.SubscriptionConfirmation -> "正在准备认购确认..."
+        is ToolResult.CalculationResult -> "Calculating returns..."
+        is ToolResult.SubscriptionConfirmation -> "Preparing subscription confirmation..."
         is ToolResult.ToolMessage -> toolResult.message
-        is ToolResult.Error -> "工具错误: ${toolResult.message}"
+        is ToolResult.Error -> "Tool error: ${toolResult.message}"
         is ToolResult.None -> ""
     }
     messages.add(ChatMessage(
