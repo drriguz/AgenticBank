@@ -147,6 +147,13 @@ fun ChatScreen(
         }
     }
 
+    val lastMessageTextLen = messages.lastOrNull()?.text?.length ?: 0
+    LaunchedEffect(lastMessageTextLen) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
@@ -230,10 +237,6 @@ fun ChatScreen(
             isRecording = false
             recordingSeconds = 0
             stopRecording()
-            scope.launch {
-                delay(100)
-                sendMessage()
-            }
             return
         }
         val hasPermission = ContextCompat.checkSelfPermission(
@@ -246,6 +249,9 @@ fun ChatScreen(
                 attachedAudioBytes = bytes
                 isRecording = false
                 recordingSeconds = 0
+                scope.launch {
+                    sendMessage()
+                }
             }
             scope.launch {
                 while (isRecording) {
@@ -349,36 +355,6 @@ fun ChatScreen(
                         isStreaming = isLoading && !message.isUser && message == messages.lastOrNull() && message.text.isEmpty(),
                         backendName = backendName,
                     )
-                }
-
-                if (isLoading && messages.lastOrNull()?.text?.isEmpty() == true && !messages.lastOrNull()!!.isUser) {
-                    item {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.Start,
-                        ) {
-                            Text(
-                                text = "Model on $backendName",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 2.dp),
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                            ) {
-                                Text(
-                                    text = "\u25CF  \u25CF  \u25CF",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    letterSpacing = 4.sp,
-                                )
-                            }
-                        }
-                    }
                 }
             }
 
@@ -645,8 +621,12 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                         }
                     }
 
+                    if (message.hasImage && message.imageUri != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
                     val showTextBubble = message.text.isNotEmpty() && !(message.hasAudio && message.text.isEmpty()) && !(message.hasImage && message.text == "Describe this image")
-                    if (showTextBubble || isStreaming) {
+                    if (showTextBubble) {
                         Surface(
                             shape = RoundedCornerShape(
                                 topStart = 16.dp, topEnd = 16.dp,
@@ -656,17 +636,26 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                             color = if (message.isUser) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.surfaceVariant,
                         ) {
-                            val displayText = when {
-                                isStreaming -> "\u200B"
-                                message.text.isEmpty() -> "\u200B"
-                                else -> message.text
-                            }
                             Text(
-                                text = displayText,
+                                text = message.text,
                                 color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
                                         else MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            )
+                        }
+                    } else if (isStreaming) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        ) {
+                            Text(
+                                text = "\u25CF  \u25CF  \u25CF",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                letterSpacing = 4.sp,
                             )
                         }
                     }
@@ -701,6 +690,23 @@ private fun VoiceMessagePlayer(audioBytes: ByteArray, isUser: Boolean) {
             val v = (audioBytes[idx].toInt() and 0xFF) - 128
             (abs(v) / 128f).coerceIn(0.15f, 1f)
         }
+    }
+
+    val calculatedDurationMs = remember(audioBytes) {
+        if (audioBytes.size > 44 &&
+            audioBytes[0] == 'R'.code.toByte() &&
+            audioBytes[8] == 'W'.code.toByte()
+        ) {
+            val dataSize = readInt(audioBytes, 40)
+            val sampleRate = readInt(audioBytes, 24)
+            val channels = readShort(audioBytes, 22)
+            val bitsPerSample = readShort(audioBytes, 34)
+            val byteRate = sampleRate * channels * bitsPerSample / 8
+            if (byteRate > 0) (dataSize * 1000L / byteRate).toInt() else 0
+        } else 0
+    }
+    if (calculatedDurationMs > 0 && durationMs == 0) {
+        durationMs = calculatedDurationMs
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "wave")
@@ -975,4 +981,16 @@ private fun writeInt(buffer: ByteArray, offset: Int, value: Int) {
 private fun writeShort(buffer: ByteArray, offset: Int, value: Int) {
     buffer[offset] = (value and 0xFF).toByte()
     buffer[offset + 1] = ((value shr 8) and 0xFF).toByte()
+}
+
+private fun readInt(buffer: ByteArray, offset: Int): Int {
+    return (buffer[offset].toInt() and 0xFF) or
+            ((buffer[offset + 1].toInt() and 0xFF) shl 8) or
+            ((buffer[offset + 2].toInt() and 0xFF) shl 16) or
+            ((buffer[offset + 3].toInt() and 0xFF) shl 24)
+}
+
+private fun readShort(buffer: ByteArray, offset: Int): Int {
+    return (buffer[offset].toInt() and 0xFF) or
+            ((buffer[offset + 1].toInt() and 0xFF) shl 8)
 }
