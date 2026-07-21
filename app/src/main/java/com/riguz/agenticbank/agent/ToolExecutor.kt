@@ -37,10 +37,56 @@ object ToolExecutor {
     private const val ANNUAL_RATE = 0.055 // 5.5% example rate from termsheet
 
     fun parseToolCall(text: String): Pair<String, JSONObject>? {
-        val jsonPattern = """```json\s*(\{.*?"tool".*?\})\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
-        val match = jsonPattern.find(text) ?: return null
+        // Try ```json ... ``` format
+        val jsonBlockPattern = """```json\s*(\{.*?\})\s*```""".toRegex(setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.MULTILINE))
+        val jsonBlockMatch = jsonBlockPattern.find(text)
+        if (jsonBlockMatch != null) {
+            val result = parseJsonToolCall(jsonBlockMatch.groupValues[1])
+            if (result != null) return result
+        }
+
+        // Try <|tool_call|> format - extract JSON after it
+        val toolCallPattern = """<\|tool_call\|>[\s\S]*?(\{[\s\S]*\})""".toRegex()
+        val toolCallMatch = toolCallPattern.find(text)
+        if (toolCallMatch != null) {
+            val result = parseJsonToolCall(toolCallMatch.groupValues[1])
+            if (result != null) return result
+        }
+
+        // Try to find any JSON with "tool" key in the text
+        val jsonPattern = """\{[^{}]*"tool"\s*:\s*"[^"]*"[^{}]*\}""".toRegex()
+        val jsonMatch = jsonPattern.find(text)
+        if (jsonMatch != null) {
+            val result = parseJsonToolCall(jsonMatch.value)
+            if (result != null) return result
+        }
+
+        // If we see <|tool_call|> but no JSON, try to infer from context
+        if (text.contains("<|tool_call|>") || text.contains("tool_call")) {
+            // Try to extract amount from text
+            val amountPattern = """(\d[\d,]*)\s*(?:美元|USD|万)""".toRegex()
+            val amountMatch = amountPattern.find(text)
+            if (amountMatch != null) {
+                val amountStr = amountMatch.groupValues[1].replace(",", "")
+                val amount = amountStr.toDoubleOrNull()
+                if (amount != null) {
+                    // Determine tool based on context
+                    val tool = if (text.contains("认购") || text.contains("subscribe") || text.contains("confirm")) {
+                        "show_confirmation"
+                    } else {
+                        "calculate_return"
+                    }
+                    return tool to JSONObject().put("amount", amount)
+                }
+            }
+        }
+
+        return null
+    }
+
+    private fun parseJsonToolCall(jsonStr: String): Pair<String, JSONObject>? {
         return try {
-            val json = JSONObject(match.groupValues[1])
+            val json = JSONObject(jsonStr)
             val tool = json.getString("tool")
             val params = json.optJSONObject("params") ?: JSONObject()
             tool to params

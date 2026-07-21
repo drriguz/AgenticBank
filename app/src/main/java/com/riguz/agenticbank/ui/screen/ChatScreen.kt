@@ -100,6 +100,10 @@ import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.Message
+import com.google.ai.edge.litertlm.tool
+import com.riguz.agenticbank.agent.CalculateReturnTool
+import com.riguz.agenticbank.agent.ShowConfirmationTool
 import com.riguz.agenticbank.agent.ToolExecutor
 import com.riguz.agenticbank.agent.ToolResult
 import kotlinx.coroutines.Dispatchers
@@ -147,11 +151,19 @@ fun ChatScreen(
     var selectedTermsheetPage by remember { mutableStateOf<Int?>(null) }
     var showTermsheetPicker by remember { mutableStateOf(false) }
 
+    val calculateReturnTool = remember { CalculateReturnTool() }
+    val showConfirmationTool = remember { ShowConfirmationTool() }
+    val tools = remember {
+        listOf(tool(calculateReturnTool), tool(showConfirmationTool))
+    }
+
     val conversation = remember {
         messages.clear()
         engine.createConversation(
             ConversationConfig(
                 systemInstruction = Contents.of(systemPrompt),
+                tools = tools,
+                automaticToolCalling = false,
             )
         )
     }
@@ -252,37 +264,86 @@ fun ChatScreen(
                 }
 
                 var fullResponse = ""
+                var lastMessage: com.google.ai.edge.litertlm.Message? = null
                 conversation.sendMessageAsync(Contents.of(contents)).collect { chunk ->
                     tokenCount++
+                    lastMessage = chunk
                     fullResponse += chunk.toString()
                     val existing = messages[pendingIndex]
                     messages[pendingIndex] = existing.copy(text = fullResponse)
                 }
 
+                // Check for tool calls
+                val toolCalls = lastMessage?.toolCalls
+                if (!toolCalls.isNullOrEmpty()) {
+                    // Remove empty initial response
+                    val cleanText = stripToolCallJson(fullResponse).trim()
+                    if (cleanText.isBlank()) {
+                        messages.removeAt(pendingIndex)
+                    } else {
+                        messages[pendingIndex] = messages[pendingIndex].copy(text = cleanText)
+                    }
+                    
+                    // Execute tools and collect responses
+                    val toolResponses = mutableListOf<Content>()
+                    for (toolCall in toolCalls) {
+                        val toolName = toolCall.name
+                        val args = toolCall.arguments
+                        
+                        // Debug: log the arguments
+                        android.util.Log.d("ToolCall", "Tool: $toolName, Args: $args")
+                        
+                        // Show friendly tool message
+                        val friendlyMessage = when (toolName) {
+                            "calculate_return" -> "正在计算收益..."
+                            "show_confirmation" -> "正在准备认购确认..."
+                            else -> "正在执行 $toolName..."
+                        }
+                        messages.add(ChatMessage(text = friendlyMessage, isUser = false))
+                        
+                        // Convert args map to JSONObject properly
+                        val params = org.json.JSONObject()
+                        for ((key, value) in args) {
+                            params.put(key, value)
+                        }
+                        
+                        // Execute the tool via ToolExecutor for UI display
+                        val toolResult = ToolExecutor.execute(toolName, params)
+                        if (toolResult !is ToolResult.None) {
+                            showToolResult(toolResult, messages, pendingIndex)
+                        }
+                        
+                        // Create tool response for model
+                        val responseJson = when (toolResult) {
+                            is ToolResult.CalculationResult -> """{"investment_amount": ${toolResult.investmentAmount}, "expected_return": ${toolResult.expectedReturn}, "total_payout": ${toolResult.totalPayout}}"""
+                            is ToolResult.SubscriptionConfirmation -> """{"product_id": "${toolResult.productId}", "investment_amount": ${toolResult.investmentAmount}, "expected_return": ${toolResult.expectedReturn}}"""
+                            is ToolResult.Error -> """{"error": "${toolResult.message}"}"""
+                            else -> """{"status": "ok"}"""
+                        }
+                        toolResponses.add(Content.ToolResponse(toolName, responseJson))
+                    }
+                    
+                    // Send tool responses back to model
+                    val toolMessage = com.google.ai.edge.litertlm.Message.tool(Contents.of(toolResponses))
+                    var finalResponse = ""
+                    conversation.sendMessageAsync(toolMessage).collect { chunk ->
+                        tokenCount++
+                        finalResponse += chunk.toString()
+                    }
+                    
+                    // Add final response as a new message
+                    if (finalResponse.isNotBlank()) {
+                        messages.add(ChatMessage(text = finalResponse, isUser = false))
+                    }
+                }
+
                 val elapsed = (System.currentTimeMillis() - startTime).coerceAtLeast(1)
                 val tps = tokenCount * 1000f / elapsed
-                messages[pendingIndex] = messages[pendingIndex].copy(
-                    speedInfo = "%.1f tokens/s  %d tokens  %.1fs".format(tps, tokenCount, elapsed / 1000.0)
-                )
-
-                val toolCall = ToolExecutor.parseToolCall(fullResponse)
-                if (toolCall != null) {
-                    val (tool, params) = toolCall
-                    val toolResult = ToolExecutor.execute(tool, params)
-                    if (toolResult !is ToolResult.None) {
-                        val resultText = when (toolResult) {
-                            is ToolResult.CalculationResult -> ToolExecutor.formatCalculationResult(toolResult)
-                            is ToolResult.SubscriptionConfirmation -> "认购确认卡片已显示 (Subscription confirmation card shown)"
-                            is ToolResult.ToolMessage -> toolResult.message
-                            is ToolResult.Error -> "工具错误: ${toolResult.message}"
-                            is ToolResult.None -> ""
-                        }
-                        messages.add(ChatMessage(
-                            text = resultText,
-                            isUser = false,
-                            toolResult = toolResult,
-                        ))
-                    }
+                val lastBotIndex = messages.indexOfLast { !it.isUser }
+                if (lastBotIndex >= 0) {
+                    messages[lastBotIndex] = messages[lastBotIndex].copy(
+                        speedInfo = "%.1f tokens/s  %d tokens  %.1fs".format(tps, tokenCount, elapsed / 1000.0)
+                    )
                 }
             } catch (e: Exception) {
                 messages[pendingIndex] = ChatMessage("Error: ${e.message}", isUser = false)
@@ -826,7 +887,8 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                     }
 
                     val showTextBubble = message.text.isNotEmpty() && !(message.hasAudio && message.text.isEmpty()) && !(message.hasImage && message.text == "Describe this image")
-                    if (showTextBubble) {
+                    val displayText = stripToolCallJson(message.text)
+                    if (showTextBubble && displayText.isNotBlank()) {
                         Surface(
                             shape = RoundedCornerShape(
                                 topStart = 16.dp, topEnd = 16.dp,
@@ -837,7 +899,7 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                                     else MaterialTheme.colorScheme.surfaceVariant,
                         ) {
                             Text(
-                                text = message.text,
+                                text = displayText,
                                 color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
                                         else MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -1194,6 +1256,35 @@ private fun VoiceMessagePlayer(audioBytes: ByteArray, isUser: Boolean) {
             }
         }
     }
+}
+
+private fun stripToolCallJson(text: String): String {
+    // Find where tool call starts and cut everything after
+    val toolCallStart = text.indexOf("<|")
+    if (toolCallStart != -1) {
+        return text.substring(0, toolCallStart).trimEnd()
+    }
+    // Also try ```json pattern
+    val jsonBlockStart = text.indexOf("```json")
+    if (jsonBlockStart != -1) {
+        return text.substring(0, jsonBlockStart).trimEnd()
+    }
+    return text
+}
+
+private fun showToolResult(toolResult: ToolResult, messages: MutableList<ChatMessage>, pendingIndex: Int) {
+    val toolMessage = when (toolResult) {
+        is ToolResult.CalculationResult -> "正在计算收益..."
+        is ToolResult.SubscriptionConfirmation -> "正在准备认购确认..."
+        is ToolResult.ToolMessage -> toolResult.message
+        is ToolResult.Error -> "工具错误: ${toolResult.message}"
+        is ToolResult.None -> ""
+    }
+    messages.add(ChatMessage(
+        text = toolMessage,
+        isUser = false,
+        toolResult = toolResult,
+    ))
 }
 
 private var audioRecord: AudioRecord? = null
