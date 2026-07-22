@@ -144,7 +144,7 @@ class DepositTool : OpenApiTool {
         val params = JSONObject(paramsJsonString)
         val amount = params.optDouble("amount", 0.0)
         if (amount <= 0) {
-            return """{"error":"Amount must be a positive number"}"""
+            return """{"error":"Missing amount. Ask the user: How much would you like to deposit?"}"""
         }
         if (amount > 10000) {
             return """{"error":"Maximum deposit amount is $10,000"}"""
@@ -175,7 +175,7 @@ class WithdrawTool : OpenApiTool {
         val params = JSONObject(paramsJsonString)
         val amount = params.optDouble("amount", 0.0)
         if (amount <= 0) {
-            return """{"error":"Amount must be a positive number"}"""
+            return """{"error":"Missing amount. Ask the user: How much would you like to withdraw?"}"""
         }
         if (amount > 10000) {
             return """{"error":"Maximum withdrawal amount is $10,000 per transaction"}"""
@@ -210,14 +210,20 @@ class TransferTool : OpenApiTool {
         val params = JSONObject(paramsJsonString)
         val amount = params.optDouble("amount", 0.0)
         val toCardNumber = params.optString("to_card_number", "")
+        if (amount <= 0 && toCardNumber.isBlank()) {
+            return """{"error":"Missing amount and card number. Ask the user: How much would you like to transfer and to which card number?"}"""
+        }
         if (amount <= 0) {
-            return """{"error":"Amount must be a positive number"}"""
+            return """{"error":"Missing amount. Ask the user: How much would you like to transfer?"}"""
         }
         if (amount > 10000) {
             return """{"error":"Maximum transfer amount is $10,000"}"""
         }
-        if (toCardNumber.isBlank() || !toCardNumber.matches(Regex("^\\d{13,19}$"))) {
-            return """{"error":"Invalid card number. Must be 13-19 digits."}"""
+        if (toCardNumber.isBlank()) {
+            return """{"error":"Missing card number. Ask the user: What is the destination card number?"}"""
+        }
+        if (!toCardNumber.matches(Regex("^\\d{13,19}$"))) {
+            return """{"error":"Invalid card number format. Card number must be 13-19 digits without spaces."}"""
         }
         if (toCardNumber == CARD_NUMBER) {
             return """{"error":"Cannot transfer to your own card"}"""
