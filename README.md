@@ -12,6 +12,14 @@ On-device AI ATM demo powered by **Gemma 4 E2B** running on **LiteRT-LM**. Users
 - Multimodal input: text, voice (hold-to-talk), image (extract card numbers from photos)
 - On-device LLM inference — no cloud API calls for the chatbot
 
+## Performance
+
+| Device | Model | Speed |
+|--------|-------|-------|
+| Xiaomi 14 Pro (Snapdragon 8 Gen 3) | Gemma 4 E2B (5GB) | ~25 tokens/sec |
+
+Model loads in ~10 seconds on first launch. Inference runs on GPU with CPU fallback.
+
 ## Projects
 
 | Directory | Stack | Build |
