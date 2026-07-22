@@ -57,7 +57,7 @@ private fun apiPatch(path: String, body: String): String {
 }
 
 private fun resolvePeriod(period: String): Pair<String?, String?> {
-    val today = LocalDate.now()
+    val today = LocalDate.now(java.time.ZoneOffset.UTC)
     return when (period) {
         "today" -> Pair(today.toString(), today.toString())
         "yesterday" -> {

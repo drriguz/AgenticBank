@@ -164,7 +164,7 @@ object ToolExecutor {
         return try {
             val period = params.optString("period", "")
 
-            val today = java.time.LocalDate.now()
+            val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
             val (startDate, endDate) = when (period) {
                 "today" -> Pair(today.toString(), today.toString())
                 "yesterday" -> {
@@ -296,10 +296,7 @@ object ToolExecutor {
         return when (result) {
             is ToolResult.Balance -> """{"balance":${result.balance},"name":"${result.name}"}"""
             is ToolResult.TransactionHistory -> {
-                val arr = result.transactions.joinToString(",") {
-                    """{"type":"${it.type}","amount":${it.amount},"timestamp":"${it.timestamp}"}"""
-                }
-                """{"transactions":[$arr]}"""
+                """{"count":${result.transactions.size}}"""
             }
             is ToolResult.OperationSuccess -> {
                 val extra = if (result.newBalance != null) ""","new_balance":${result.newBalance}""" else ""
