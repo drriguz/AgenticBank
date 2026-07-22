@@ -4,6 +4,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import android.util.Log
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -46,34 +47,42 @@ data class TransactionItem(
 object ToolExecutor {
 
     fun execute(tool: String, params: JSONObject): ToolResult {
+        Log.d("ToolExecutor", "execute tool=$tool params=$params")
         return when (tool) {
             "get_current_date" -> getCurrentDate()
             "check_balance" -> checkBalance()
             "transaction_history" -> transactionHistory(params)
             "deposit" -> {
-                val amount = params.optDouble("amount", 0.0)
+                val amount = parseAmount(params)
+                Log.d("ToolExecutor", "deposit amount=$amount")
                 when {
-                    amount <= 0 -> ToolResult.ValidationError("Amount is required but not provided")
+                    amount == null -> ToolResult.ValidationError("Amount is required but not provided")
+                    amount <= 0 -> ToolResult.ValidationError("Amount must be positive")
                     amount > 10000 -> ToolResult.ValidationError("Maximum deposit amount is $10,000")
                     else -> ToolResult.ConfirmRequest("deposit", mapOf("amount" to amount))
                 }
             }
             "withdraw" -> {
-                val amount = params.optDouble("amount", 0.0)
+                val amount = parseAmount(params)
+                Log.d("ToolExecutor", "withdraw amount=$amount")
                 when {
-                    amount <= 0 -> ToolResult.ValidationError("Amount is required but not provided")
+                    amount == null -> ToolResult.ValidationError("Amount is required but not provided")
+                    amount <= 0 -> ToolResult.ValidationError("Amount must be positive")
                     amount > 10000 -> ToolResult.ValidationError("Maximum withdrawal amount is $10,000 per transaction")
                     else -> ToolResult.ConfirmRequest("withdraw", mapOf("amount" to amount))
                 }
             }
             "transfer" -> {
-                val amount = params.optDouble("amount", 0.0)
+                val amount = parseAmount(params)
                 val toCardNumber = params.optString("to_card_number", "")
+                Log.d("ToolExecutor", "transfer amount=$amount toCardNumber=$toCardNumber")
                 when {
-                    amount <= 0 && toCardNumber.isBlank() ->
+                    amount == null && toCardNumber.isBlank() ->
                         ToolResult.ValidationError("Amount and destination card number are both required")
-                    amount <= 0 ->
+                    amount == null ->
                         ToolResult.ValidationError("Amount is required. Destination card number received: $toCardNumber")
+                    amount <= 0 ->
+                        ToolResult.ValidationError("Amount must be positive")
                     amount > 10000 ->
                         ToolResult.ValidationError("Maximum transfer amount is $10,000")
                     toCardNumber.isBlank() ->
@@ -92,6 +101,16 @@ object ToolExecutor {
                 ToolResult.ConfirmRequest("change_password", emptyMap())
             }
             else -> ToolResult.Error("Unknown tool: $tool")
+        }
+    }
+
+    private fun parseAmount(params: JSONObject): Double? {
+        val raw = params.opt("amount")
+        Log.d("ToolExecutor", "parseAmount raw=$raw type=${raw?.javaClass?.simpleName}")
+        return when (raw) {
+            is Number -> raw.toDouble()
+            is String -> raw.toDoubleOrNull()
+            else -> null
         }
     }
 

@@ -7,6 +7,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import org.json.JSONArray
+import android.util.Log
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
@@ -53,6 +54,16 @@ private fun apiPatch(path: String, body: String): String {
             ?: """{"success":false,"error":"Empty response"}"""
     } catch (e: Exception) {
         """{"success":false,"error":"${e.message}"}"""
+    }
+}
+
+private fun parseAmount(params: JSONObject): Double? {
+    val raw = params.opt("amount")
+    Log.d("Tools", "parseAmount raw=$raw type=${raw?.javaClass?.simpleName}")
+    return when (raw) {
+        is Number -> raw.toDouble()
+        is String -> raw.toDoubleOrNull()
+        else -> null
     }
 }
 
@@ -191,10 +202,15 @@ class DepositTool : OpenApiTool {
     """.trimIndent()
 
     override fun execute(paramsJsonString: String): String {
+        Log.d("DepositTool", "execute: $paramsJsonString")
         val params = JSONObject(paramsJsonString)
-        val amount = params.optDouble("amount", 0.0)
-        if (amount <= 0) {
+        val amount = parseAmount(params)
+        Log.d("DepositTool", "parsed amount=$amount")
+        if (amount == null) {
             return """{"error":"Amount is required but not provided"}"""
+        }
+        if (amount <= 0) {
+            return """{"error":"Amount must be positive"}"""
         }
         if (amount > 10000) {
             return """{"error":"Maximum deposit amount is $10,000"}"""
@@ -222,10 +238,15 @@ class WithdrawTool : OpenApiTool {
     """.trimIndent()
 
     override fun execute(paramsJsonString: String): String {
+        Log.d("WithdrawTool", "execute: $paramsJsonString")
         val params = JSONObject(paramsJsonString)
-        val amount = params.optDouble("amount", 0.0)
-        if (amount <= 0) {
+        val amount = parseAmount(params)
+        Log.d("WithdrawTool", "parsed amount=$amount")
+        if (amount == null) {
             return """{"error":"Amount is required but not provided"}"""
+        }
+        if (amount <= 0) {
+            return """{"error":"Amount must be positive"}"""
         }
         if (amount > 10000) {
             return """{"error":"Maximum withdrawal amount is $10,000 per transaction"}"""
@@ -257,14 +278,19 @@ class TransferTool : OpenApiTool {
     """.trimIndent()
 
     override fun execute(paramsJsonString: String): String {
+        Log.d("TransferTool", "execute: $paramsJsonString")
         val params = JSONObject(paramsJsonString)
-        val amount = params.optDouble("amount", 0.0)
+        val amount = parseAmount(params)
         val toCardNumber = params.optString("to_card_number", "")
-        if (amount <= 0 && toCardNumber.isBlank()) {
+        Log.d("TransferTool", "parsed amount=$amount toCardNumber=$toCardNumber")
+        if (amount == null && toCardNumber.isBlank()) {
             return """{"error":"Amount and destination card number are both required"}"""
         }
-        if (amount <= 0) {
+        if (amount == null) {
             return """{"error":"Amount is required. Destination card number received: $toCardNumber"}"""
+        }
+        if (amount <= 0) {
+            return """{"error":"Amount must be positive"}"""
         }
         if (amount > 10000) {
             return """{"error":"Maximum transfer amount is $10,000"}"""
