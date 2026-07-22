@@ -392,11 +392,6 @@ fun ChatScreen(
                         speedInfo = "%.1f tokens/s  %d tokens  %.1fs".format(tps, tokenCount, elapsed / 1000.0)
                     )
                 }
-                // Speak the bot's response
-                val lastBotMsg = messages.lastOrNull { !it.isUser && it.text.isNotBlank() }
-                if (lastBotMsg != null) {
-                    tts.value?.speak(lastBotMsg.text, TextToSpeech.QUEUE_FLUSH, null, null)
-                }
             } catch (e: Exception) {
                 messages[pendingIndex] = ChatMessage("Error: ${e.message}", isUser = false)
             } finally {
@@ -569,6 +564,7 @@ fun ChatScreen(
                         message = message,
                         isStreaming = isLoading && !message.isUser && message == messages.lastOrNull() && message.text.isEmpty(),
                         backendName = backendName,
+                        onSpeak = { text -> tts.value?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null) },
                     )
                 }
             }
@@ -776,7 +772,7 @@ fun ChatScreen(
 }
 
 @Composable
-private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName: String) {
+private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName: String, onSpeak: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(4.dp))
         Column(
@@ -885,12 +881,23 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                     }
 
                     if (message.speedInfo != null) {
-                        Text(
-                            text = message.speedInfo,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = message.speedInfo,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                            )
+                        }
+                    }
+                    // Speak button for bot text messages
+                    if (!message.isUser && message.text.isNotBlank()) {
+                        IconButton(
+                            onClick = { onSpeak(message.text) },
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Text("\uD83D\uDD0A", fontSize = 12.sp)
+                        }
                     }
 
                     if (message.toolResult != null) {
