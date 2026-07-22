@@ -178,14 +178,15 @@ fun ChatScreen(
 
     val tts = remember { mutableStateOf<TextToSpeech?>(null) }
     DisposableEffect(context) {
-        var engine: TextToSpeech? = null
-        val ttsEngine = TextToSpeech(context) { status ->
-            Log.d("TTS", "TTS init callback status=$status")
-            engine?.setLanguage(java.util.Locale.US)
+        val ref = arrayOf<TextToSpeech?>(null)
+        ref[0] = TextToSpeech(context) { status ->
+            Log.d("TTS", "TTS init status=$status")
+            if (status == TextToSpeech.SUCCESS) {
+                ref[0]?.setLanguage(java.util.Locale.US)
+                tts.value = ref[0]
+            }
         }
-        engine = ttsEngine
-        tts.value = ttsEngine
-        onDispose { ttsEngine.shutdown() }
+        onDispose { ref[0]?.shutdown() }
     }
 
     val tools = remember {
