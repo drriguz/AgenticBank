@@ -126,15 +126,13 @@ class DepositTool : OpenApiTool {
     override fun getToolDescriptionJsonString(): String = """
     {
         "name": "deposit",
-        "description": "Deposit money into the account. The amount MUST be explicitly provided by the user. NEVER guess or use a default value. If the user did not specify an amount, do NOT call this tool — ask the user first.",
+        "description": "Deposit money into the account. The amount MUST be explicitly provided by the user. NEVER guess or use a default value.",
         "parameters": {
             "type": "object",
             "properties": {
                 "amount": {
                     "type": "number",
-                    "minimum": 0.01,
-                    "maximum": 10000,
-                    "description": "Exact amount to deposit in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value. Null or zero is not allowed."
+                    "description": "The amount to deposit, exactly as the user provided. Do NOT modify the value."
                 }
             },
             "required": ["amount"]
@@ -159,15 +157,13 @@ class WithdrawTool : OpenApiTool {
     override fun getToolDescriptionJsonString(): String = """
     {
         "name": "withdraw",
-        "description": "Withdraw money from the account. The amount MUST be explicitly provided by the user. NEVER guess or use a default value. If the user did not specify an amount, do NOT call this tool — ask the user first.",
+        "description": "Withdraw money from the account. The amount MUST be explicitly provided by the user. NEVER guess or use a default value.",
         "parameters": {
             "type": "object",
             "properties": {
                 "amount": {
                     "type": "number",
-                    "minimum": 0.01,
-                    "maximum": 10000,
-                    "description": "Exact amount to withdraw in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value. Null or zero is not allowed."
+                    "description": "The amount to withdraw, exactly as the user provided. Do NOT modify the value."
                 }
             },
             "required": ["amount"]
@@ -192,19 +188,17 @@ class TransferTool : OpenApiTool {
     override fun getToolDescriptionJsonString(): String = """
     {
         "name": "transfer",
-        "description": "Transfer money to another account by card number. Both amount and to_card_number MUST be explicitly provided by the user. NEVER guess or invent values. If the user did not provide both the exact amount and the exact destination card number, do NOT call this tool — ask the user for the missing information first.",
+        "description": "Transfer money to another account by card number. Both amount and to_card_number MUST be explicitly provided by the user. NEVER guess or invent values.",
         "parameters": {
             "type": "object",
             "properties": {
                 "amount": {
                     "type": "number",
-                    "minimum": 0.01,
-                    "maximum": 10000,
-                    "description": "Exact amount to transfer in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value. Null or zero is not allowed."
+                    "description": "The amount to transfer, exactly as the user provided. Do NOT modify the value."
                 },
                 "to_card_number": {
                     "type": "string",
-                    "description": "The destination card number exactly as provided by the user. Use the EXACT value the user said - do not modify, pad, or complete it. If user said '123', pass '123'. Do NOT make up or guess digits."
+                    "description": "The destination card number exactly as provided by the user. Use the EXACT value the user said - do not modify, pad, or complete it."
                 }
             },
             "required": ["amount", "to_card_number"]
