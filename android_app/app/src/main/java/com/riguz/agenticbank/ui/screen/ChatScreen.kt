@@ -176,17 +176,9 @@ fun ChatScreen(
     var recordingSeconds by remember { mutableIntStateOf(0) }
     var pendingConfirmation by remember { mutableStateOf<PendingConfirmation?>(null) }
 
-    val tts = remember { mutableStateOf<TextToSpeech?>(null) }
-    DisposableEffect(context) {
-        val ref = arrayOf<TextToSpeech?>(null)
-        ref[0] = TextToSpeech(context, { status ->
-            Log.d("TTS", "TTS init status=$status")
-            if (status == TextToSpeech.SUCCESS) {
-                ref[0]?.setLanguage(java.util.Locale.US)
-                tts.value = ref[0]
-            }
-        }, "com.google.android.tts")
-        onDispose { ref[0]?.shutdown() }
+    var ttsEngine: TextToSpeech? by remember { mutableStateOf(null) }
+    DisposableEffect(Unit) {
+        onDispose { ttsEngine?.shutdown() }
     }
 
     val tools = remember {
@@ -566,12 +558,16 @@ fun ChatScreen(
                         isStreaming = isLoading && !message.isUser && message == messages.lastOrNull() && message.text.isEmpty(),
                         backendName = backendName,
                         onSpeak = { text ->
-                            val engine = tts.value
-                            if (engine != null) {
-                                val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
-                                if (result == TextToSpeech.ERROR) {
-                                    Log.e("TTS", "speak failed")
+                            if (ttsEngine == null) {
+                                ttsEngine = TextToSpeech(context) { status ->
+                                    Log.d("TTS", "TTS init status=$status")
+                                    if (status == TextToSpeech.SUCCESS) {
+                                        ttsEngine?.setLanguage(java.util.Locale.US)
+                                        ttsEngine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
+                                    }
                                 }
+                            } else {
+                                ttsEngine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
                             }
                         },
                     )
