@@ -95,7 +95,6 @@ public class AtmService {
         if (!accountRepo.existsById(accountId)) {
             throw new NoSuchElementException("Account not found: " + accountId);
         }
-        return txnRepo.findByFromAccountIdOrToAccountIdAndTimestampBetweenOrderByTimestampDesc(
-                accountId, accountId, start, end);
+        return txnRepo.findAccountTransactionsBetween(accountId, start, end);
     }
 }
