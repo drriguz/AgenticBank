@@ -179,13 +179,13 @@ fun ChatScreen(
     val tts = remember { mutableStateOf<TextToSpeech?>(null) }
     DisposableEffect(context) {
         val ref = arrayOf<TextToSpeech?>(null)
-        ref[0] = TextToSpeech(context) { status ->
-            Log.d("TTS", "TTS init status=$status, defaultEngine=${ref[0]?.defaultEngine}")
+        ref[0] = TextToSpeech(context, { status ->
+            Log.d("TTS", "TTS init status=$status")
             if (status == TextToSpeech.SUCCESS) {
                 ref[0]?.setLanguage(java.util.Locale.US)
                 tts.value = ref[0]
             }
-        }
+        }, "com.google.android.tts")
         onDispose { ref[0]?.shutdown() }
     }
 
