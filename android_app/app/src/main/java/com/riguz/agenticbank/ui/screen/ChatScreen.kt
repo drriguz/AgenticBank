@@ -177,7 +177,18 @@ fun ChatScreen(
     var pendingConfirmation by remember { mutableStateOf<PendingConfirmation?>(null) }
 
     var ttsEngine: TextToSpeech? by remember { mutableStateOf(null) }
+    var isSpeaking by remember { mutableStateOf(false) }
     DisposableEffect(Unit) {
+        ttsEngine = TextToSpeech(context) { status ->
+            Log.d("TTS", "TTS init status=$status")
+            if (status == TextToSpeech.SUCCESS) {
+                ttsEngine?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) { isSpeaking = true }
+                    override fun onDone(utteranceId: String?) { isSpeaking = false }
+                    override fun onError(utteranceId: String?) { isSpeaking = false }
+                })
+            }
+        }
         onDispose { ttsEngine?.shutdown() }
     }
 
@@ -384,6 +395,19 @@ fun ChatScreen(
                     messages[lastBotIndex] = messages[lastBotIndex].copy(
                         speedInfo = "%.1f tokens/s  %d tokens  %.1fs".format(tps, tokenCount, elapsed / 1000.0)
                     )
+                    // Auto-speak bot response
+                    val botText = messages[lastBotIndex].text.trim()
+                    if (botText.isNotBlank()) {
+                        val engine = ttsEngine
+                        if (engine != null) {
+                            engine.setLanguage(java.util.Locale.US)
+                            val sentences = botText.split(Regex("(?<=[.!?])\\s+")).filter { it.isNotBlank() }
+                            sentences.forEachIndexed { i, sentence ->
+                                val mode = if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+                                engine.speak(sentence.trim(), mode, null, "auto_$i")
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 messages[pendingIndex] = ChatMessage("Error: ${e.message}", isUser = false)
@@ -557,35 +581,19 @@ fun ChatScreen(
                         message = message,
                         isStreaming = isLoading && !message.isUser && message == messages.lastOrNull() && message.text.isEmpty(),
                         backendName = backendName,
+                        isSpeaking = isSpeaking,
                         onSpeak = { text ->
-                            fun speakWith(engine: TextToSpeech) {
-                                engine.language = java.util.Locale.US
-                                val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
-                                Log.d("TTS", "speak result=$result")
-                            }
-                            if (ttsEngine == null) {
-                                ttsEngine = TextToSpeech(context) { status ->
-                                    Log.d("TTS", "Default engine init status=$status")
-                                    if (status == TextToSpeech.SUCCESS) {
-                                        ttsEngine?.let { speakWith(it) }
-                                    } else {
-                                        Log.e("TTS", "Default engine failed, trying com.google.android.tts")
-                                        val ref = arrayOf<TextToSpeech?>(null)
-                                        ref[0] = TextToSpeech(context, { s ->
-                                            Log.d("TTS", "Google TTS init status=$s")
-                                            if (s == TextToSpeech.SUCCESS) {
-                                                ttsEngine = ref[0]
-                                                ref[0]?.let { speakWith(it) }
-                                            } else {
-                                                Log.e("TTS", "Both engines failed")
-                                            }
-                                        }, "com.google.android.tts")
-                                    }
+                            val engine = ttsEngine
+                            if (engine != null) {
+                                engine.setLanguage(java.util.Locale.US)
+                                val sentences = text.split(Regex("(?<=[.!?])\\s+")).filter { it.isNotBlank() }
+                                sentences.forEachIndexed { i, sentence ->
+                                    val mode = if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+                                    engine.speak(sentence.trim(), mode, null, "tts_$i")
                                 }
-                            } else {
-                                ttsEngine?.let { speakWith(it) }
                             }
                         },
+                        onStop = { ttsEngine?.stop(); isSpeaking = false },
                     )
                 }
             }
@@ -793,7 +801,7 @@ fun ChatScreen(
 }
 
 @Composable
-private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName: String, onSpeak: (String) -> Unit) {
+private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName: String, isSpeaking: Boolean, onSpeak: (String) -> Unit, onStop: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(4.dp))
         Column(
@@ -911,13 +919,19 @@ private fun MessageItem(message: ChatMessage, isStreaming: Boolean, backendName:
                             )
                         }
                     }
-                    // Speak button for bot text messages
+                    // Speak/Stop button for bot text messages
                     if (!message.isUser && message.text.isNotBlank()) {
                         IconButton(
-                            onClick = { onSpeak(message.text) },
+                            onClick = {
+                                if (isSpeaking) onStop()
+                                else onSpeak(message.text)
+                            },
                             modifier = Modifier.size(24.dp),
                         ) {
-                            Text("\uD83D\uDD0A", fontSize = 12.sp)
+                            Text(
+                                if (isSpeaking) "\u23F9" else "\uD83D\uDD0A",
+                                fontSize = 12.sp,
+                            )
                         }
                     }
 
