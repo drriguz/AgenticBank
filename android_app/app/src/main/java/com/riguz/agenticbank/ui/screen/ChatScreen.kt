@@ -181,13 +181,13 @@ fun ChatScreen(
         val ref = arrayOf<TextToSpeech?>(null)
         ref[0] = TextToSpeech(context) { status ->
             Log.d("TTS", "TTS init status=$status")
+            val engines = ref[0]?.engines
+            engines?.forEach {
+                Log.d("TTS", "Engine: ${it.label}, package: ${it.name}")
+            }
             if (status == TextToSpeech.SUCCESS) {
                 ref[0]?.setLanguage(java.util.Locale.US)
                 tts.value = ref[0]
-                val engines = ref[0]?.engines
-                engines?.forEach {
-                    Log.d("TTS", "Engine: ${it.label}, package: ${it.name}")
-                }
             }
         }
         onDispose { ref[0]?.shutdown() }
