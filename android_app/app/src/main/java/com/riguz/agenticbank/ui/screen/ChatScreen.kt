@@ -112,9 +112,26 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import java.io.File
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
 private const val DISPLAY_CARD_NUMBER = "4242 **** **** 4242"
+
+private val TIMESTAMP_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
+private fun formatLocalTime(utcTimestamp: String): String {
+    return try {
+        val utc = LocalDateTime.parse(utcTimestamp, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val instant = utc.atZone(ZoneOffset.UTC).toInstant()
+        val local = instant.atZone(ZoneId.systemDefault())
+        local.format(TIMESTAMP_FMT)
+    } catch (e: Exception) {
+        utcTimestamp
+    }
+}
 
 private data class PendingConfirmation(
     val operation: String,
@@ -961,7 +978,7 @@ private fun TransactionHistoryCard(result: ToolResult.TransactionHistory) {
                         )
                     }
                     Text(
-                        text = txn.timestamp,
+                        text = formatLocalTime(txn.timestamp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
                     )
