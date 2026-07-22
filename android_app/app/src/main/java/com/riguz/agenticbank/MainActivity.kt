@@ -31,7 +31,7 @@ Available services:
 2. Withdrawal
 3. Transfer (by card number)
 4. Balance inquiry
-5. Transaction history
+5. Transaction history (supports date filtering - e.g., "yesterday", "last week", "from 2026-01-01 to 2026-01-31")
 6. Change password
 
 Rules:

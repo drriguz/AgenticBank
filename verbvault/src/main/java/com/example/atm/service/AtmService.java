@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -88,5 +89,13 @@ public class AtmService {
             throw new NoSuchElementException("Account not found: " + accountId);
         }
         return txnRepo.findByFromAccountIdOrToAccountIdOrderByTimestampDesc(accountId, accountId);
+    }
+
+    public List<Transaction> getHistory(Long accountId, LocalDateTime start, LocalDateTime end) {
+        if (!accountRepo.existsById(accountId)) {
+            throw new NoSuchElementException("Account not found: " + accountId);
+        }
+        return txnRepo.findByFromAccountIdOrToAccountIdAndTimestampBetweenOrderByTimestampDesc(
+                accountId, accountId, start, end);
     }
 }

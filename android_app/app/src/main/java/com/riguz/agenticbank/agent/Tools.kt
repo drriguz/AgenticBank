@@ -90,17 +90,36 @@ class TransactionHistoryTool : OpenApiTool {
     override fun getToolDescriptionJsonString(): String = """
     {
         "name": "transaction_history",
-        "description": "View recent transaction history. Returns a list of transactions with type, amount, and timestamp.",
+        "description": "View transaction history. Optionally filter by date range. Use start_date and end_date in YYYY-MM-DD format. For 'yesterday', use yesterday's date for both start_date and end_date. For 'last week', use the date 7 days ago as start_date and today as end_date.",
         "parameters": {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in YYYY-MM-DD format. Optional. Use the exact date the user provided."
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in YYYY-MM-DD format. Optional. Use the exact date the user provided."
+                }
+            },
             "required": []
         }
     }
     """.trimIndent()
 
     override fun execute(paramsJsonString: String): String {
-        val resp = apiGet("/api/accounts/$CARD_NUMBER/transactions")
+        val params = JSONObject(paramsJsonString)
+        val startDate = params.optString("start_date", "")
+        val endDate = params.optString("end_date", "")
+
+        var url = "/api/accounts/$CARD_NUMBER/transactions"
+        val queryParams = mutableListOf<String>()
+        if (startDate.isNotBlank()) queryParams.add("startDate=$startDate")
+        if (endDate.isNotBlank()) queryParams.add("endDate=$endDate")
+        if (queryParams.isNotEmpty()) url += "?" + queryParams.joinToString("&")
+
+        val resp = apiGet(url)
         return try {
             val json = JSONObject(resp)
             if (json.optBoolean("success", false)) {

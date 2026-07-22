@@ -47,7 +47,7 @@ object ToolExecutor {
     fun execute(tool: String, params: JSONObject): ToolResult {
         return when (tool) {
             "check_balance" -> checkBalance()
-            "transaction_history" -> transactionHistory()
+            "transaction_history" -> transactionHistory(params)
             "deposit" -> {
                 val amount = params.optDouble("amount", 0.0)
                 when {
@@ -152,9 +152,18 @@ object ToolExecutor {
         }
     }
 
-    private fun transactionHistory(): ToolResult {
+    private fun transactionHistory(params: JSONObject): ToolResult {
         return try {
-            val resp = get("/api/accounts/$DEFAULT_CARD_NUMBER/transactions")
+            val startDate = params.optString("start_date", "")
+            val endDate = params.optString("end_date", "")
+
+            var path = "/api/accounts/$DEFAULT_CARD_NUMBER/transactions"
+            val queryParams = mutableListOf<String>()
+            if (startDate.isNotBlank()) queryParams.add("startDate=$startDate")
+            if (endDate.isNotBlank()) queryParams.add("endDate=$endDate")
+            if (queryParams.isNotEmpty()) path += "?" + queryParams.joinToString("&")
+
+            val resp = get(path)
             val json = JSONObject(resp)
             if (json.optBoolean("success", false)) {
                 val arr = json.getJSONArray("data")

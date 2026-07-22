@@ -9,6 +9,9 @@ import com.example.atm.service.AtmService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @RestController
@@ -34,9 +37,19 @@ public class AccountController {
     }
 
     @GetMapping("/{cardNumber}/transactions")
-    public ApiResponse<List<Transaction>> getHistory(@PathVariable String cardNumber) {
+    public ApiResponse<List<Transaction>> getHistory(
+            @PathVariable String cardNumber,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate) {
         Account account = atmService.getAccountByCardNumber(cardNumber);
-        List<Transaction> transactions = atmService.getHistory(account.getId());
+        List<Transaction> transactions;
+        if (startDate != null && endDate != null) {
+            LocalDateTime start = startDate.atStartOfDay();
+            LocalDateTime end = endDate.atTime(LocalTime.MAX);
+            transactions = atmService.getHistory(account.getId(), start, end);
+        } else {
+            transactions = atmService.getHistory(account.getId());
+        }
         return ApiResponse.ok(transactions);
     }
 
