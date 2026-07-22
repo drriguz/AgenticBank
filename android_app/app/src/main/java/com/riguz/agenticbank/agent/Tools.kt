@@ -204,10 +204,7 @@ class TransferTool : OpenApiTool {
                 },
                 "to_card_number": {
                     "type": "string",
-                    "minLength": 13,
-                    "maxLength": 19,
-                    "pattern": "^[0-9]{13,19}$",
-                    "description": "The exact destination card number (13-19 digits, no spaces) as provided by the user. Do NOT make up a card number. Null or empty string is not allowed."
+                    "description": "The destination card number exactly as provided by the user. Use the EXACT value the user said - do not modify, pad, or complete it. If user said '123', pass '123'. Do NOT make up or guess digits."
                 }
             },
             "required": ["amount", "to_card_number"]
