@@ -7,6 +7,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import org.json.JSONArray
+import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
 private const val BASE_URL = "http://192.168.31.66:8080"
@@ -52,6 +53,26 @@ private fun apiPatch(path: String, body: String): String {
             ?: """{"success":false,"error":"Empty response"}"""
     } catch (e: Exception) {
         """{"success":false,"error":"${e.message}"}"""
+    }
+}
+
+class GetCurrentDateTool : OpenApiTool {
+    override fun getToolDescriptionJsonString(): String = """
+    {
+        "name": "get_current_date",
+        "description": "Get today's date. Use this when the user mentions relative dates like 'today', 'yesterday', 'last week', etc. Call this first to get the current date, then calculate the required dates.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+    """.trimIndent()
+
+    override fun execute(paramsJsonString: String): String {
+        val today = LocalDate.now()
+        val yesterday = today.minusDays(1)
+        return """{"today":"$today","yesterday":"$yesterday"}"""
     }
 }
 

@@ -31,6 +31,7 @@ sealed class ToolResult {
         val newBalance: Double? = null,
     ) : ToolResult()
 
+    data class DateInfo(val today: String, val yesterday: String) : ToolResult()
     data class ValidationError(val message: String) : ToolResult()
     data class Error(val message: String) : ToolResult()
     object None : ToolResult()
@@ -46,6 +47,7 @@ object ToolExecutor {
 
     fun execute(tool: String, params: JSONObject): ToolResult {
         return when (tool) {
+            "get_current_date" -> getCurrentDate()
             "check_balance" -> checkBalance()
             "transaction_history" -> transactionHistory(params)
             "deposit" -> {
@@ -130,6 +132,12 @@ object ToolExecutor {
             }
             else -> ToolResult.Error("Unknown operation: $operation")
         }
+    }
+
+    private fun getCurrentDate(): ToolResult {
+        val today = java.time.LocalDate.now()
+        val yesterday = today.minusDays(1)
+        return ToolResult.DateInfo(today.toString(), yesterday.toString())
     }
 
     private fun checkBalance(): ToolResult {
@@ -287,6 +295,7 @@ object ToolExecutor {
                 """{"status":"success","message":"${result.message}"$extra}"""
             }
             is ToolResult.ValidationError -> """{"error":"${result.message}"}"""
+            is ToolResult.DateInfo -> """{"today":"${result.today}","yesterday":"${result.yesterday}"}"""
             is ToolResult.Error -> """{"error":"${result.message}"}"""
             else -> """{"status":"ok"}"""
         }

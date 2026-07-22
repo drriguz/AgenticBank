@@ -97,6 +97,7 @@ import com.google.ai.edge.litertlm.tool
 import com.riguz.agenticbank.agent.ChangePasswordTool
 import com.riguz.agenticbank.agent.CheckBalanceTool
 import com.riguz.agenticbank.agent.DepositTool
+import com.riguz.agenticbank.agent.GetCurrentDateTool
 import com.riguz.agenticbank.agent.ToolExecutor
 import com.riguz.agenticbank.agent.ToolResult
 import com.riguz.agenticbank.agent.TransactionHistoryTool
@@ -159,6 +160,7 @@ fun ChatScreen(
 
     val tools = remember {
         listOf(
+            tool(GetCurrentDateTool()),
             tool(CheckBalanceTool()),
             tool(TransactionHistoryTool()),
             tool(DepositTool()),
@@ -1135,6 +1137,7 @@ private fun showAtmToolResult(toolResult: ToolResult, messages: MutableList<Chat
         is ToolResult.TransactionHistory -> "Loading transaction history..."
         is ToolResult.OperationSuccess -> toolResult.message
         is ToolResult.ConfirmRequest -> "Waiting for confirmation..."
+        is ToolResult.DateInfo -> "" // Hidden from UI
         is ToolResult.ValidationError -> "" // Hidden from UI
         is ToolResult.Error -> "Error: ${toolResult.message}"
         is ToolResult.None -> ""
