@@ -56,6 +56,20 @@ private fun apiPatch(path: String, body: String): String {
     }
 }
 
+private fun resolvePeriod(period: String): Pair<String?, String?> {
+    val today = LocalDate.now()
+    return when (period) {
+        "today" -> Pair(today.toString(), today.toString())
+        "yesterday" -> {
+            val d = today.minusDays(1)
+            Pair(d.toString(), d.toString())
+        }
+        "last_7_days" -> Pair(today.minusDays(7).toString(), today.toString())
+        "last_30_days" -> Pair(today.minusDays(30).toString(), today.toString())
+        else -> Pair(null, null)
+    }
+}
+
 class GetCurrentDateTool : OpenApiTool {
     override fun getToolDescriptionJsonString(): String = """
     {
@@ -111,17 +125,13 @@ class TransactionHistoryTool : OpenApiTool {
     override fun getToolDescriptionJsonString(): String = """
     {
         "name": "transaction_history",
-        "description": "View transaction history. Optionally filter by date range.",
+        "description": "View transaction history.",
         "parameters": {
             "type": "object",
             "properties": {
-                "start_date": {
+                "period": {
                     "type": "string",
-                    "description": "Start date in ISO format YYYY-MM-DD (e.g., 2026-07-21). Do NOT remove the dashes."
-                },
-                "end_date": {
-                    "type": "string",
-                    "description": "End date in ISO format YYYY-MM-DD (e.g., 2026-07-22). Do NOT remove the dashes."
+                    "description": "Time period filter: 'today', 'yesterday', 'last_7_days', 'last_30_days', or omit for all. Example: for 'yesterday', pass 'yesterday'."
                 }
             },
             "required": []
@@ -131,13 +141,13 @@ class TransactionHistoryTool : OpenApiTool {
 
     override fun execute(paramsJsonString: String): String {
         val params = JSONObject(paramsJsonString)
-        val startDate = params.optString("start_date", "")
-        val endDate = params.optString("end_date", "")
+        val period = params.optString("period", "")
 
+        val (startDate, endDate) = resolvePeriod(period)
         var url = "/api/accounts/$CARD_NUMBER/transactions"
         val queryParams = mutableListOf<String>()
-        if (startDate.isNotBlank()) queryParams.add("startDate=$startDate")
-        if (endDate.isNotBlank()) queryParams.add("endDate=$endDate")
+        if (startDate != null) queryParams.add("startDate=$startDate")
+        if (endDate != null) queryParams.add("endDate=$endDate")
         if (queryParams.isNotEmpty()) url += "?" + queryParams.joinToString("&")
 
         val resp = apiGet(url)

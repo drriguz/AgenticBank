@@ -162,13 +162,24 @@ object ToolExecutor {
 
     private fun transactionHistory(params: JSONObject): ToolResult {
         return try {
-            val startDate = params.optString("start_date", "")
-            val endDate = params.optString("end_date", "")
+            val period = params.optString("period", "")
+
+            val today = java.time.LocalDate.now()
+            val (startDate, endDate) = when (period) {
+                "today" -> Pair(today.toString(), today.toString())
+                "yesterday" -> {
+                    val d = today.minusDays(1)
+                    Pair(d.toString(), d.toString())
+                }
+                "last_7_days" -> Pair(today.minusDays(7).toString(), today.toString())
+                "last_30_days" -> Pair(today.minusDays(30).toString(), today.toString())
+                else -> Pair(null, null)
+            }
 
             var path = "/api/accounts/$DEFAULT_CARD_NUMBER/transactions"
             val queryParams = mutableListOf<String>()
-            if (startDate.isNotBlank()) queryParams.add("startDate=$startDate")
-            if (endDate.isNotBlank()) queryParams.add("endDate=$endDate")
+            if (startDate != null) queryParams.add("startDate=$startDate")
+            if (endDate != null) queryParams.add("endDate=$endDate")
             if (queryParams.isNotEmpty()) path += "?" + queryParams.joinToString("&")
 
             val resp = get(path)
