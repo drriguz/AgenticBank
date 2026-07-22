@@ -132,7 +132,9 @@ class DepositTool : OpenApiTool {
             "properties": {
                 "amount": {
                     "type": "number",
-                    "description": "Exact amount to deposit in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value."
+                    "minimum": 0.01,
+                    "maximum": 10000,
+                    "description": "Exact amount to deposit in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value. Null or zero is not allowed."
                 }
             },
             "required": ["amount"]
@@ -163,7 +165,9 @@ class WithdrawTool : OpenApiTool {
             "properties": {
                 "amount": {
                     "type": "number",
-                    "description": "Exact amount to withdraw in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value."
+                    "minimum": 0.01,
+                    "maximum": 10000,
+                    "description": "Exact amount to withdraw in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value. Null or zero is not allowed."
                 }
             },
             "required": ["amount"]
@@ -194,11 +198,16 @@ class TransferTool : OpenApiTool {
             "properties": {
                 "amount": {
                     "type": "number",
-                    "description": "Exact amount to transfer in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value."
+                    "minimum": 0.01,
+                    "maximum": 10000,
+                    "description": "Exact amount to transfer in USD, as specified by the user. Must be a positive number, max 10000. Do NOT use a default value. Null or zero is not allowed."
                 },
                 "to_card_number": {
                     "type": "string",
-                    "description": "The exact destination card number (13-19 digits, no spaces) as provided by the user. Do NOT make up a card number."
+                    "minLength": 13,
+                    "maxLength": 19,
+                    "pattern": "^[0-9]{13,19}$",
+                    "description": "The exact destination card number (13-19 digits, no spaces) as provided by the user. Do NOT make up a card number. Null or empty string is not allowed."
                 }
             },
             "required": ["amount", "to_card_number"]
