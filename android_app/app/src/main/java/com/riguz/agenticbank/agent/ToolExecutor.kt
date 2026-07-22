@@ -50,7 +50,7 @@ object ToolExecutor {
             "deposit" -> {
                 val amount = params.optDouble("amount", 0.0)
                 when {
-                    amount <= 0 -> ToolResult.Error("Missing amount. Ask the user: How much would you like to deposit?")
+                    amount <= 0 -> ToolResult.Error("Amount is required but not provided")
                     amount > 10000 -> ToolResult.Error("Maximum deposit amount is $10,000")
                     else -> ToolResult.ConfirmRequest("deposit", mapOf("amount" to amount))
                 }
@@ -58,7 +58,7 @@ object ToolExecutor {
             "withdraw" -> {
                 val amount = params.optDouble("amount", 0.0)
                 when {
-                    amount <= 0 -> ToolResult.Error("Missing amount. Ask the user: How much would you like to withdraw?")
+                    amount <= 0 -> ToolResult.Error("Amount is required but not provided")
                     amount > 10000 -> ToolResult.Error("Maximum withdrawal amount is $10,000 per transaction")
                     else -> ToolResult.ConfirmRequest("withdraw", mapOf("amount" to amount))
                 }
@@ -68,15 +68,15 @@ object ToolExecutor {
                 val toCardNumber = params.optString("to_card_number", "")
                 when {
                     amount <= 0 && toCardNumber.isBlank() ->
-                        ToolResult.Error("Missing amount and card number. Ask the user: How much would you like to transfer and to which card number?")
+                        ToolResult.Error("Amount and destination card number are both required")
                     amount <= 0 ->
-                        ToolResult.Error("Missing amount. Ask the user: How much would you like to transfer?")
+                        ToolResult.Error("Amount is required but not provided")
                     amount > 10000 ->
                         ToolResult.Error("Maximum transfer amount is $10,000")
                     toCardNumber.isBlank() ->
-                        ToolResult.Error("Missing card number. Ask the user: What is the destination card number?")
+                        ToolResult.Error("Destination card number is required but not provided")
                     !toCardNumber.matches(Regex("^\\d{13,19}$")) ->
-                        ToolResult.Error("Invalid card number format. Card number must be 13-19 digits without spaces.")
+                        ToolResult.Error("Invalid card number format. Must be 13-19 digits without spaces.")
                     toCardNumber == DEFAULT_CARD_NUMBER ->
                         ToolResult.Error("Cannot transfer to your own card")
                     else -> ToolResult.ConfirmRequest(

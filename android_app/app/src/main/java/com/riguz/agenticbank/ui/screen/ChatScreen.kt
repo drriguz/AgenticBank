@@ -333,11 +333,10 @@ fun ChatScreen(
                         }
 
                         if (toolResult !is ToolResult.None) {
-                            val shouldShowToUser = when {
-                                toolResult is ToolResult.Error && toolResult.message.contains("Ask the user") -> false
-                                else -> true
-                            }
-                            if (shouldShowToUser) {
+                            val isValidationError = toolResult is ToolResult.Error &&
+                                (toolResult.message.contains("is required but not provided") ||
+                                 toolResult.message.contains("are both required"))
+                            if (!isValidationError) {
                                 showAtmToolResult(toolResult, messages)
                             }
                         }
