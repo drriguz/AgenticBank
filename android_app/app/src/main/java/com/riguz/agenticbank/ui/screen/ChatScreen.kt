@@ -558,16 +558,32 @@ fun ChatScreen(
                         isStreaming = isLoading && !message.isUser && message == messages.lastOrNull() && message.text.isEmpty(),
                         backendName = backendName,
                         onSpeak = { text ->
+                            fun speakWith(engine: TextToSpeech) {
+                                engine.language = java.util.Locale.US
+                                val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
+                                Log.d("TTS", "speak result=$result")
+                            }
                             if (ttsEngine == null) {
                                 ttsEngine = TextToSpeech(context) { status ->
-                                    Log.d("TTS", "TTS init status=$status")
+                                    Log.d("TTS", "Default engine init status=$status")
                                     if (status == TextToSpeech.SUCCESS) {
-                                        ttsEngine?.setLanguage(java.util.Locale.US)
-                                        ttsEngine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
+                                        ttsEngine?.let { speakWith(it) }
+                                    } else {
+                                        Log.e("TTS", "Default engine failed, trying com.google.android.tts")
+                                        val ref = arrayOf<TextToSpeech?>(null)
+                                        ref[0] = TextToSpeech(context, { s ->
+                                            Log.d("TTS", "Google TTS init status=$s")
+                                            if (s == TextToSpeech.SUCCESS) {
+                                                ttsEngine = ref[0]
+                                                ref[0]?.let { speakWith(it) }
+                                            } else {
+                                                Log.e("TTS", "Both engines failed")
+                                            }
+                                        }, "com.google.android.tts")
                                     }
                                 }
                             } else {
-                                ttsEngine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
+                                ttsEngine?.let { speakWith(it) }
                             }
                         },
                     )
