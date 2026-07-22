@@ -184,6 +184,10 @@ fun ChatScreen(
             if (status == TextToSpeech.SUCCESS) {
                 ref[0]?.setLanguage(java.util.Locale.US)
                 tts.value = ref[0]
+                val engines = ref[0]?.engines
+                engines?.forEach {
+                    Log.d("TTS", "Engine: ${it.label}, package: ${it.name}")
+                }
             }
         }
         onDispose { ref[0]?.shutdown() }
