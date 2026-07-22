@@ -177,11 +177,13 @@ fun ChatScreen(
     var pendingConfirmation by remember { mutableStateOf<PendingConfirmation?>(null) }
 
     val tts = remember { mutableStateOf<TextToSpeech?>(null) }
+    val ttsReady = remember { mutableStateOf(false) }
     DisposableEffect(context) {
         var ttsEngine: TextToSpeech? = null
         ttsEngine = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 ttsEngine?.language = java.util.Locale.US
+                ttsReady.value = true
             }
         }
         tts.value = ttsEngine
@@ -564,7 +566,12 @@ fun ChatScreen(
                         message = message,
                         isStreaming = isLoading && !message.isUser && message == messages.lastOrNull() && message.text.isEmpty(),
                         backendName = backendName,
-                        onSpeak = { text -> tts.value?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null) },
+                        onSpeak = { text ->
+                            val engine = tts.value
+                            if (engine != null && ttsReady.value) {
+                                engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                            }
+                        },
                     )
                 }
             }
