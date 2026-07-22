@@ -334,7 +334,7 @@ fun ChatScreen(
                             toolResult = deferred.await()
                         }
 
-                        if (toolResult !is ToolResult.None && toolResult !is ToolResult.ValidationError) {
+                        if (toolResult !is ToolResult.None && toolResult !is ToolResult.ValidationError && toolResult !is ToolResult.DateInfo) {
                             showAtmToolResult(toolResult, messages)
                         }
 
