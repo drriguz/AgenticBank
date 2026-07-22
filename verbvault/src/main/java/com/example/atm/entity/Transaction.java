@@ -44,7 +44,9 @@ public class Transaction {
 
     @PrePersist
     void prePersist() {
-        this.timestamp = LocalDateTime.now(ZoneOffset.UTC);
+        if (this.timestamp == null) {
+            this.timestamp = LocalDateTime.now(ZoneOffset.UTC);
+        }
     }
 
     public Long getId() { return id; }
@@ -53,4 +55,5 @@ public class Transaction {
     public Long getToAccountId() { return toAccountId; }
     public BigDecimal getAmount() { return amount; }
     public LocalDateTime getTimestamp() { return timestamp; }
+    public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
 }

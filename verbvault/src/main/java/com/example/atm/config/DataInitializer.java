@@ -51,8 +51,18 @@ public class DataInitializer implements CommandLineRunner {
         Account john = accountRepo.findByCardNumber("4242424242424242").orElseThrow();
         Long johnId = john.getId();
 
-        txnRepo.save(new Transaction(Transaction.TransactionType.DEPOSIT, null, johnId, new BigDecimal("1000.00")));
-        txnRepo.save(new Transaction(Transaction.TransactionType.WITHDRAW, johnId, null, new BigDecimal("200.00")));
-        txnRepo.save(new Transaction(Transaction.TransactionType.DEPOSIT, null, johnId, new BigDecimal("500.00")));
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        Transaction t1 = new Transaction(Transaction.TransactionType.DEPOSIT, null, johnId, new BigDecimal("1000.00"));
+        t1.setTimestamp(now.minusDays(2).withHour(10).withMinute(30));
+        txnRepo.save(t1);
+
+        Transaction t2 = new Transaction(Transaction.TransactionType.WITHDRAW, johnId, null, new BigDecimal("200.00"));
+        t2.setTimestamp(now.minusDays(1).withHour(14).withMinute(15));
+        txnRepo.save(t2);
+
+        Transaction t3 = new Transaction(Transaction.TransactionType.DEPOSIT, null, johnId, new BigDecimal("500.00"));
+        t3.setTimestamp(now.withHour(9).withMinute(0));
+        txnRepo.save(t3);
     }
 }
