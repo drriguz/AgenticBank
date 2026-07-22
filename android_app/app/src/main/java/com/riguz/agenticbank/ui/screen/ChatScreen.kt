@@ -334,8 +334,9 @@ fun ChatScreen(
 
                         if (toolResult !is ToolResult.None) {
                             val isValidationError = toolResult is ToolResult.Error &&
-                                (toolResult.message.contains("is required but not provided") ||
-                                 toolResult.message.contains("are both required"))
+                                (toolResult.message.contains("is required") ||
+                                 toolResult.message.contains("are both required") ||
+                                 toolResult.message.contains("Cannot transfer to your own card"))
                             if (!isValidationError) {
                                 showAtmToolResult(toolResult, messages)
                             }
