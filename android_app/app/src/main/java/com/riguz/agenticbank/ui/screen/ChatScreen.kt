@@ -333,7 +333,13 @@ fun ChatScreen(
                         }
 
                         if (toolResult !is ToolResult.None) {
-                            showAtmToolResult(toolResult, messages)
+                            val shouldShowToUser = when {
+                                toolResult is ToolResult.Error && toolResult.message.contains("Ask the user") -> false
+                                else -> true
+                            }
+                            if (shouldShowToUser) {
+                                showAtmToolResult(toolResult, messages)
+                            }
                         }
 
                         val responseJson = ToolExecutor.toolResponseJson(toolResult)
