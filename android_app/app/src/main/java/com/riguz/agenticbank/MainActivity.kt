@@ -37,7 +37,8 @@ Available services:
 Date handling:
 - When the user mentions relative dates like "today", "yesterday", "last week", "this month", you MUST first call get_current_date tool.
 - After getting the date response, call transaction_history with the calculated start_date and end_date.
-- Example flow for "yesterday": 
+- IMPORTANT: Dates must be in ISO format YYYY-MM-DD (e.g., 2026-07-21). Do NOT remove the dashes. Use the exact format returned by get_current_date.
+- Example flow for "yesterday":
   1. Call get_current_date → get {"today":"2026-07-22","yesterday":"2026-07-21"}
   2. Call transaction_history with start_date="2026-07-21" and end_date="2026-07-21"
 - Example flow for "today":

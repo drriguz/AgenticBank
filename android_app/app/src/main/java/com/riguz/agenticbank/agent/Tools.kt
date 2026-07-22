@@ -111,17 +111,17 @@ class TransactionHistoryTool : OpenApiTool {
     override fun getToolDescriptionJsonString(): String = """
     {
         "name": "transaction_history",
-        "description": "View transaction history. Optionally filter by date range. Use start_date and end_date in YYYY-MM-DD format. For 'yesterday', use yesterday's date for both start_date and end_date. For 'last week', use the date 7 days ago as start_date and today as end_date.",
+        "description": "View transaction history. Optionally filter by date range.",
         "parameters": {
             "type": "object",
             "properties": {
                 "start_date": {
                     "type": "string",
-                    "description": "Start date in YYYY-MM-DD format. Optional. Use the exact date the user provided."
+                    "description": "Start date in ISO format YYYY-MM-DD (e.g., 2026-07-21). Do NOT remove the dashes."
                 },
                 "end_date": {
                     "type": "string",
-                    "description": "End date in YYYY-MM-DD format. Optional. Use the exact date the user provided."
+                    "description": "End date in ISO format YYYY-MM-DD (e.g., 2026-07-22). Do NOT remove the dashes."
                 }
             },
             "required": []
