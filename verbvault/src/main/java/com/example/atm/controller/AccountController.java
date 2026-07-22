@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @RestController
@@ -46,6 +47,10 @@ public class AccountController {
         if (startDate != null && endDate != null) {
             LocalDateTime start = startDate.atStartOfDay();
             LocalDateTime end = endDate.atTime(LocalTime.MAX);
+            transactions = atmService.getHistory(account.getId(), start, end);
+        } else if (startDate != null) {
+            LocalDateTime start = startDate.atStartOfDay();
+            LocalDateTime end = startDate.atTime(LocalTime.MAX);
             transactions = atmService.getHistory(account.getId(), start, end);
         } else {
             transactions = atmService.getHistory(account.getId());

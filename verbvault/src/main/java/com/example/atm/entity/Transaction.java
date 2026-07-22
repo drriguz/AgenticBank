@@ -3,6 +3,7 @@ package com.example.atm.entity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Entity
 @Table(name = "transactions")
@@ -43,7 +44,7 @@ public class Transaction {
 
     @PrePersist
     void prePersist() {
-        this.timestamp = LocalDateTime.now();
+        this.timestamp = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     public Long getId() { return id; }
