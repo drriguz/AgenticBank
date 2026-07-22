@@ -1,11 +1,15 @@
 package com.example.atm.config;
 
 import com.example.atm.entity.Account;
+import com.example.atm.entity.Transaction;
 import com.example.atm.repository.AccountRepository;
+import com.example.atm.repository.TransactionRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 
 @Component
@@ -26,9 +30,11 @@ public class DataInitializer implements CommandLineRunner {
     );
 
     private final AccountRepository accountRepo;
+    private final TransactionRepository txnRepo;
 
-    public DataInitializer(AccountRepository accountRepo) {
+    public DataInitializer(AccountRepository accountRepo, TransactionRepository txnRepo) {
         this.accountRepo = accountRepo;
+        this.txnRepo = txnRepo;
     }
 
     @Override
@@ -40,5 +46,13 @@ public class DataInitializer implements CommandLineRunner {
             account.deposit(new BigDecimal("5000.00"));
             accountRepo.save(account);
         }
+
+        // Add sample transactions for John Smith (4242424242424242)
+        Account john = accountRepo.findByCardNumber("4242424242424242").orElseThrow();
+        Long johnId = john.getId();
+
+        txnRepo.save(new Transaction(Transaction.TransactionType.DEPOSIT, null, johnId, new BigDecimal("1000.00")));
+        txnRepo.save(new Transaction(Transaction.TransactionType.WITHDRAW, johnId, null, new BigDecimal("200.00")));
+        txnRepo.save(new Transaction(Transaction.TransactionType.DEPOSIT, null, johnId, new BigDecimal("500.00")));
     }
 }
