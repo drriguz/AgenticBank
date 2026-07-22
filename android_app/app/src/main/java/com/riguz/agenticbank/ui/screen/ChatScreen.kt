@@ -332,14 +332,8 @@ fun ChatScreen(
                             toolResult = deferred.await()
                         }
 
-                        if (toolResult !is ToolResult.None) {
-                            val isValidationError = toolResult is ToolResult.Error &&
-                                (toolResult.message.contains("is required") ||
-                                 toolResult.message.contains("are both required") ||
-                                 toolResult.message.contains("Cannot transfer to your own card"))
-                            if (!isValidationError) {
-                                showAtmToolResult(toolResult, messages)
-                            }
+                        if (toolResult !is ToolResult.None && toolResult !is ToolResult.ValidationError) {
+                            showAtmToolResult(toolResult, messages)
                         }
 
                         val responseJson = ToolExecutor.toolResponseJson(toolResult)
@@ -1141,6 +1135,7 @@ private fun showAtmToolResult(toolResult: ToolResult, messages: MutableList<Chat
         is ToolResult.TransactionHistory -> "Loading transaction history..."
         is ToolResult.OperationSuccess -> toolResult.message
         is ToolResult.ConfirmRequest -> "Waiting for confirmation..."
+        is ToolResult.ValidationError -> "" // Hidden from UI
         is ToolResult.Error -> "Error: ${toolResult.message}"
         is ToolResult.None -> ""
     }

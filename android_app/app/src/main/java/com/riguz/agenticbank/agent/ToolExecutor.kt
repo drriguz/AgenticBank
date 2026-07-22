@@ -31,6 +31,7 @@ sealed class ToolResult {
         val newBalance: Double? = null,
     ) : ToolResult()
 
+    data class ValidationError(val message: String) : ToolResult()
     data class Error(val message: String) : ToolResult()
     object None : ToolResult()
 }
@@ -50,16 +51,16 @@ object ToolExecutor {
             "deposit" -> {
                 val amount = params.optDouble("amount", 0.0)
                 when {
-                    amount <= 0 -> ToolResult.Error("Amount is required but not provided")
-                    amount > 10000 -> ToolResult.Error("Maximum deposit amount is $10,000")
+                    amount <= 0 -> ToolResult.ValidationError("Amount is required but not provided")
+                    amount > 10000 -> ToolResult.ValidationError("Maximum deposit amount is $10,000")
                     else -> ToolResult.ConfirmRequest("deposit", mapOf("amount" to amount))
                 }
             }
             "withdraw" -> {
                 val amount = params.optDouble("amount", 0.0)
                 when {
-                    amount <= 0 -> ToolResult.Error("Amount is required but not provided")
-                    amount > 10000 -> ToolResult.Error("Maximum withdrawal amount is $10,000 per transaction")
+                    amount <= 0 -> ToolResult.ValidationError("Amount is required but not provided")
+                    amount > 10000 -> ToolResult.ValidationError("Maximum withdrawal amount is $10,000 per transaction")
                     else -> ToolResult.ConfirmRequest("withdraw", mapOf("amount" to amount))
                 }
             }
@@ -68,17 +69,17 @@ object ToolExecutor {
                 val toCardNumber = params.optString("to_card_number", "")
                 when {
                     amount <= 0 && toCardNumber.isBlank() ->
-                        ToolResult.Error("Amount and destination card number are both required")
+                        ToolResult.ValidationError("Amount and destination card number are both required")
                     amount <= 0 ->
-                        ToolResult.Error("Amount is required. Destination card number received: $toCardNumber")
+                        ToolResult.ValidationError("Amount is required. Destination card number received: $toCardNumber")
                     amount > 10000 ->
-                        ToolResult.Error("Maximum transfer amount is $10,000")
+                        ToolResult.ValidationError("Maximum transfer amount is $10,000")
                     toCardNumber.isBlank() ->
-                        ToolResult.Error("Destination card number is required. Amount received: $amount")
+                        ToolResult.ValidationError("Destination card number is required. Amount received: $amount")
                     !toCardNumber.matches(Regex("^\\d{13,19}$")) ->
-                        ToolResult.Error("Invalid card number format. Must be 13-19 digits without spaces.")
+                        ToolResult.ValidationError("Invalid card number format. Must be 13-19 digits without spaces.")
                     toCardNumber == DEFAULT_CARD_NUMBER ->
-                        ToolResult.Error("Cannot transfer to your own card")
+                        ToolResult.ValidationError("Cannot transfer to your own card")
                     else -> ToolResult.ConfirmRequest(
                         "transfer",
                         mapOf("amount" to amount, "to_card_number" to toCardNumber),
@@ -276,6 +277,7 @@ object ToolExecutor {
                 val extra = if (result.newBalance != null) ""","new_balance":${result.newBalance}""" else ""
                 """{"status":"success","message":"${result.message}"$extra}"""
             }
+            is ToolResult.ValidationError -> """{"error":"${result.message}"}"""
             is ToolResult.Error -> """{"error":"${result.message}"}"""
             else -> """{"status":"ok"}"""
         }
