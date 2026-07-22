@@ -182,8 +182,15 @@ fun ChatScreen(
         var ttsEngine: TextToSpeech? = null
         ttsEngine = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                ttsEngine?.language = java.util.Locale.US
-                ttsReady.value = true
+                val result = ttsEngine?.setLanguage(java.util.Locale.US)
+                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    Log.e("TTS", "US English not supported on this device")
+                } else {
+                    Log.d("TTS", "TTS engine initialized successfully")
+                    ttsReady.value = true
+                }
+            } else {
+                Log.e("TTS", "TTS initialization failed with status: $status")
             }
         }
         tts.value = ttsEngine
@@ -569,7 +576,12 @@ fun ChatScreen(
                         onSpeak = { text ->
                             val engine = tts.value
                             if (engine != null && ttsReady.value) {
-                                engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                                val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
+                                if (result == TextToSpeech.ERROR) {
+                                    Log.e("TTS", "speak failed")
+                                }
+                            } else {
+                                Log.e("TTS", "TTS not ready, engine=${tts.value}, ready=${ttsReady.value}")
                             }
                         },
                     )
