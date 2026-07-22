@@ -223,13 +223,13 @@ class TransferTool : OpenApiTool {
             return """{"error":"Amount and destination card number are both required"}"""
         }
         if (amount <= 0) {
-            return """{"error":"Amount is required but not provided"}"""
+            return """{"error":"Amount is required. Destination card number received: $toCardNumber"}"""
         }
         if (amount > 10000) {
             return """{"error":"Maximum transfer amount is $10,000"}"""
         }
         if (toCardNumber.isBlank()) {
-            return """{"error":"Destination card number is required but not provided"}"""
+            return """{"error":"Destination card number is required. Amount received: $amount"}"""
         }
         if (!toCardNumber.matches(Regex("^\\d{13,19}$"))) {
             return """{"error":"Invalid card number format. Must be 13-19 digits without spaces."}"""

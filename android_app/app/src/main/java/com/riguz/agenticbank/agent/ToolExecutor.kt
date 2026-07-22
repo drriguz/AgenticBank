@@ -70,11 +70,11 @@ object ToolExecutor {
                     amount <= 0 && toCardNumber.isBlank() ->
                         ToolResult.Error("Amount and destination card number are both required")
                     amount <= 0 ->
-                        ToolResult.Error("Amount is required but not provided")
+                        ToolResult.Error("Amount is required. Destination card number received: $toCardNumber")
                     amount > 10000 ->
                         ToolResult.Error("Maximum transfer amount is $10,000")
                     toCardNumber.isBlank() ->
-                        ToolResult.Error("Destination card number is required but not provided")
+                        ToolResult.Error("Destination card number is required. Amount received: $amount")
                     !toCardNumber.matches(Regex("^\\d{13,19}$")) ->
                         ToolResult.Error("Invalid card number format. Must be 13-19 digits without spaces.")
                     toCardNumber == DEFAULT_CARD_NUMBER ->
