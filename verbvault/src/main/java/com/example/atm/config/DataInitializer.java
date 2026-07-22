@@ -8,7 +8,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
 
@@ -47,22 +47,23 @@ public class DataInitializer implements CommandLineRunner {
             accountRepo.save(account);
         }
 
-        // Add sample transactions for John Smith (4242424242424242)
+        // Add sample transactions for John Smith with fixed UTC dates
         Account john = accountRepo.findByCardNumber("4242424242424242").orElseThrow();
         Long johnId = john.getId();
 
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        // Today's date in UTC
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
 
         Transaction t1 = new Transaction(Transaction.TransactionType.DEPOSIT, null, johnId, new BigDecimal("1000.00"));
-        t1.setTimestamp(now.minusDays(2).withHour(10).withMinute(30));
+        t1.setTimestamp(today.minusDays(2).atTime(10, 30).atOffset(ZoneOffset.UTC).toLocalDateTime());
         txnRepo.save(t1);
 
         Transaction t2 = new Transaction(Transaction.TransactionType.WITHDRAW, johnId, null, new BigDecimal("200.00"));
-        t2.setTimestamp(now.minusDays(1).withHour(14).withMinute(15));
+        t2.setTimestamp(today.minusDays(1).atTime(14, 15).atOffset(ZoneOffset.UTC).toLocalDateTime());
         txnRepo.save(t2);
 
         Transaction t3 = new Transaction(Transaction.TransactionType.DEPOSIT, null, johnId, new BigDecimal("500.00"));
-        t3.setTimestamp(now.withHour(9).withMinute(0));
+        t3.setTimestamp(today.atTime(9, 0).atOffset(ZoneOffset.UTC).toLocalDateTime());
         txnRepo.save(t3);
     }
 }

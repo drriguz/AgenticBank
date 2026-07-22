@@ -7,6 +7,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaPlayer
 import android.net.Uri
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -174,6 +175,18 @@ fun ChatScreen(
     var isVoiceMode by remember { mutableStateOf(false) }
     var recordingSeconds by remember { mutableIntStateOf(0) }
     var pendingConfirmation by remember { mutableStateOf<PendingConfirmation?>(null) }
+
+    val tts = remember { mutableStateOf<TextToSpeech?>(null) }
+    DisposableEffect(context) {
+        var ttsEngine: TextToSpeech? = null
+        ttsEngine = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                ttsEngine?.language = java.util.Locale.US
+            }
+        }
+        tts.value = ttsEngine
+        onDispose { ttsEngine?.shutdown() }
+    }
 
     val tools = remember {
         listOf(
@@ -378,6 +391,11 @@ fun ChatScreen(
                     messages[lastBotIndex] = messages[lastBotIndex].copy(
                         speedInfo = "%.1f tokens/s  %d tokens  %.1fs".format(tps, tokenCount, elapsed / 1000.0)
                     )
+                }
+                // Speak the bot's response
+                val lastBotMsg = messages.lastOrNull { !it.isUser && it.text.isNotBlank() }
+                if (lastBotMsg != null) {
+                    tts.value?.speak(lastBotMsg.text, TextToSpeech.QUEUE_FLUSH, null, null)
                 }
             } catch (e: Exception) {
                 messages[pendingIndex] = ChatMessage("Error: ${e.message}", isUser = false)
