@@ -177,24 +177,15 @@ fun ChatScreen(
     var pendingConfirmation by remember { mutableStateOf<PendingConfirmation?>(null) }
 
     val tts = remember { mutableStateOf<TextToSpeech?>(null) }
-    val ttsReady = remember { mutableStateOf(false) }
     DisposableEffect(context) {
-        var ttsEngine: TextToSpeech? = null
-        ttsEngine = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                val result = ttsEngine?.setLanguage(java.util.Locale.US)
-                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Log.e("TTS", "US English not supported on this device")
-                } else {
-                    Log.d("TTS", "TTS engine initialized successfully")
-                    ttsReady.value = true
-                }
-            } else {
-                Log.e("TTS", "TTS initialization failed with status: $status")
-            }
+        var engine: TextToSpeech? = null
+        val ttsEngine = TextToSpeech(context) { status ->
+            Log.d("TTS", "TTS init callback status=$status")
+            engine?.setLanguage(java.util.Locale.US)
         }
+        engine = ttsEngine
         tts.value = ttsEngine
-        onDispose { ttsEngine?.shutdown() }
+        onDispose { ttsEngine.shutdown() }
     }
 
     val tools = remember {
@@ -575,13 +566,11 @@ fun ChatScreen(
                         backendName = backendName,
                         onSpeak = { text ->
                             val engine = tts.value
-                            if (engine != null && ttsReady.value) {
+                            if (engine != null) {
                                 val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "atm_tts")
                                 if (result == TextToSpeech.ERROR) {
                                     Log.e("TTS", "speak failed")
                                 }
-                            } else {
-                                Log.e("TTS", "TTS not ready, engine=${tts.value}, ready=${ttsReady.value}")
                             }
                         },
                     )
